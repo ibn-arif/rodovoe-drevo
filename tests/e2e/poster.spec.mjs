@@ -87,3 +87,79 @@ test('download a fan poster on A3', async ({ page, context }) => {
   expect(bytes.includes(Buffer.from('/FontFile2'))).toBe(true);
   expect(bytes.includes(Buffer.from('PTSerif'))).toBe(true);
 });
+
+async function synthetic(page, count) {
+  await page.goto('index.html');
+  await page.addScriptTag({ url: 'vendor/d3.min.js' });
+  return count;
+}
+const makeTreeFn = `(count) => {
+  const names = ['Али', 'МухӀамад', 'Патимат', 'Расул', 'Зайнаб', 'Хадижат', 'Абдулмуслим', 'Иса', 'Муса', 'Асият'];
+  let n = 0;
+  const make = () => ({ id: 'p' + n, name: names[n % names.length] + ' ' + n, spouse: n++ % 3 ? '' : 'жена Асият', children: [] });
+  const root = make(); const queue = [[root, 0]];
+  while (n < count) { const [p, d] = queue.shift(); const k = Math.min(count - n, d < 2 ? 4 : 3);
+    for (let i = 0; i < k; i++) { const c = make(); p.children.push(c); queue.push([c, d + 1]); } }
+  return root;
+}`;
+
+test('topdown: names horizontal, black frames, nothing off the sheet', async ({ page }) => {
+  await synthetic(page);
+  const r = await page.evaluate(async src => {
+    const { renderPoster, PAPER } = await import('/js/poster/layouts.js');
+    const root = eval(src)(400);
+    const out = [];
+    for (const paper of ['A0', 'A4']) {
+      const svg = renderPoster(root, { design: 'topdown', paper, title: 'Род Али' });
+      document.body.append(svg);
+      const [W, H] = PAPER[paper];
+      const texts = [...svg.querySelectorAll('text.pn')];
+      const rotated = texts.filter(t => /rotate/.test(t.getAttribute('transform') || '')).length;
+      const ctm = svg.getScreenCTM().inverse();
+      const off = texts.filter(t => {
+        const b = t.getBoundingClientRect();
+        const p1 = new DOMPoint(b.left, b.top).matrixTransform(ctm), p2 = new DOMPoint(b.right, b.bottom).matrixTransform(ctm);
+        return p1.x < -0.01 || p1.y < -0.01 || p2.x > W + 0.01 || p2.y > H + 0.01;
+      }).length;
+      const strokes = [...new Set([...svg.querySelectorAll('rect.box')].map(x => x.getAttribute('stroke')))];
+      out.push({ paper, names: texts.length, rotated, off, strokes, minFont: Number(svg.dataset.minFont) });
+      svg.remove();
+    }
+    return out;
+  }, makeTreeFn);
+  for (const x of r) {
+    expect(x.names).toBe(400);
+    expect(x.rotated, x.paper).toBe(0);
+    expect(x.off, x.paper).toBe(0);
+    expect(x.strokes).toEqual(['#000000']);
+  }
+  // Горизонтальные подписи не должны стать мельче, чем были вертикальные: на A0 не меньше 2 мм.
+  expect(r.find(x => x.paper === 'A0').minFont).toBeGreaterThan(2);
+});
+
+test('fan: colour palettes', async ({ page }) => {
+  await synthetic(page);
+  const r = await page.evaluate(async src => {
+    const { renderPoster, FAN_PALETTES } = await import('/js/poster/layouts.js');
+    const root = eval(src)(60);
+    return FAN_PALETTES.map(p => {
+      const svg = renderPoster(root, { design: 'fan', paper: 'A3', title: 'Т', palette: p.id });
+      const fills = new Set([...svg.querySelectorAll('path.arc')].map(a => a.getAttribute('fill')));
+      return { id: p.id, title: p.title, ok: [...fills].every(f => p.colors.includes(f)), n: fills.size };
+    });
+  }, makeTreeFn);
+  expect(r.length).toBeGreaterThanOrEqual(4);
+  for (const x of r) { expect(x.ok, x.id).toBe(true); expect(x.n).toBeGreaterThan(1); }
+});
+
+test('palette choice appears only for the fan', async ({ page, context }) => {
+  const s = await seed();
+  await installFakeApi(context, s.backend);
+  await page.goto('tree.html#t=' + s.v);
+  await page.getByRole('button', { name: 'Плакат PDF' }).click();
+  await expect(page.getByRole('group', { name: 'Палитра' })).toBeHidden();
+  await page.getByRole('radio', { name: 'Круг' }).check();
+  await expect(page.getByRole('group', { name: 'Палитра' })).toBeVisible();
+  await page.getByRole('radio', { name: 'Море' }).check();
+  await expect(page.locator('#poster-preview path.arc').first()).toHaveAttribute('fill', /#/);
+});

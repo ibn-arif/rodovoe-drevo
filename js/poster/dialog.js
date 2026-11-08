@@ -13,14 +13,16 @@ export function initPoster(getSnapshot, getTitle) {
   const chosen = () => ({
     design: dlg.querySelector('input[name=design]:checked').value,
     paper: dlg.querySelector('input[name=paper]:checked').value,
+    palette: dlg.querySelector('input[name=palette]:checked').value,
   });
   function svgFor() {
-    const { design, paper } = chosen();
+    const { design, paper, palette } = chosen();
     const root = buildTree(getSnapshot());
     const count = getSnapshot().people.length;
-    return renderPoster(root, { design, paper, title: getTitle(), subtitle: `${count} чел. · ${new Date().toLocaleDateString('ru-RU', { year: 'numeric', month: 'long', day: 'numeric' })}` });
+    return renderPoster(root, { design, paper, palette, title: getTitle(), subtitle: `${count} чел. · ${new Date().toLocaleDateString('ru-RU', { year: 'numeric', month: 'long', day: 'numeric' })}` });
   }
   function update() {
+    dlg.querySelector('#palette-box').hidden = chosen().design !== 'fan';
     const svg = svgFor();
     svg.removeAttribute('width');
     svg.removeAttribute('height');

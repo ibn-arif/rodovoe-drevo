@@ -10,6 +10,13 @@ export const DESIGNS = [
   { id: 'gold', title: 'Тёмный с золотом' },
 ];
 export const MIN_FONT_MM = 1.2;
+export const FAN_PALETTES = [
+  { id: 'earth', title: 'Земля', colors: ['#8B2D3B', '#C9A35B', '#5E7F6E', '#6F5E96', '#3F6E8C', '#B8693A'] },
+  { id: 'garden', title: 'Сад', colors: ['#2F6B45', '#7FA650', '#A7C4A0', '#3E7C6E', '#C2B04A', '#5C8A3A'] },
+  { id: 'sea', title: 'Море', colors: ['#1F4E79', '#2E86AB', '#7FB7D6', '#3D5A80', '#48A9A6', '#98C1D9'] },
+  { id: 'sunset', title: 'Закат', colors: ['#B23A48', '#E07A3F', '#F2B134', '#8C3B5A', '#D95D39', '#F28F3B'] },
+  { id: 'graphite', title: 'Графит', colors: ['#2B2B2B', '#5A5A5A', '#8A8A8A', '#444444', '#6E6E6E', '#A0A0A0'] },
+];
 
 const NS = 'http://www.w3.org/2000/svg';
 const FONT = 'PT Serif';
@@ -144,8 +151,98 @@ function vertical(g, root, area, theme, { up, boxes }) {
   return FS * s;
 }
 
+// ── Сверху вниз: все имена горизонтально, в чёрных рамках ───────────────
+// Верхние поколения расходятся в стороны, глубокие — столбиком под родителем, как в оглавлении.
+// Какие ветки развернуть в ряд, подбирается так, чтобы шрифт на листе был крупнее.
+function topdown(g, root, area, theme) {
+  const FS = 10, PAD = FS * 0.5, BOX_H = FS * 1.9, IND = FS * 1.6, GAP_V = FS * 0.45, GAP_H = FS * 1.1, LEVEL = FS * 2.2;
+  const weight = d => d.depth < 2 ? 700 : 400;
+  const size = d => d.depth === 0 ? FS * 1.3 : FS;
+  const boxW = d => labelWidth(d, size(d), weight(d)) + PAD * 2;
+  const nodes = root.descendants();
+  const bw = new Map(nodes.map(d => [d, boxW(d)]));
+
+  // spread: узлы, чьи дети идут в ряд; остальные — столбиком.
+  function layoutWith(spread) {
+    const dim = new Map();
+    for (const d of [...nodes].reverse()) {
+      const w0 = bw.get(d);
+      if (!d.children) { dim.set(d, { w: w0, h: BOX_H }); continue; }
+      const kids = d.children.map(c => dim.get(c));
+      if (!spread.has(d)) {
+        dim.set(d, { w: Math.max(w0, IND + Math.max(...kids.map(k => k.w))), h: BOX_H + kids.reduce((s, k) => s + GAP_V + k.h, 0), stacked: true });
+      } else {
+        const row = kids.reduce((s, k) => s + k.w, 0) + GAP_H * (kids.length - 1);
+        dim.set(d, { w: Math.max(w0, row), h: BOX_H + LEVEL + Math.max(...kids.map(k => k.h)), row });
+      }
+    }
+    const r = dim.get(root);
+    return { dim, s: Math.min(area.w / r.w, area.h / r.h), w: r.w, h: r.h };
+  }
+  // Начинаем с разворота верхних поколений (подбираем глубину), затем жадно разворачиваем
+  // или сворачиваем крупные ветки, пока шрифт на листе растёт.
+  const parents = nodes.filter(d => d.children && d.children.some(c => c.children));
+  const candidates = [...parents].sort((x, y) => y.descendants().length - x.descendants().length).slice(0, 60);
+  // Жадный подбор от нескольких стартов (развёрнуто 0, 1, 2… верхних поколений), берём лучший.
+  let best = null;
+  for (let T = 0; T <= Math.min(root.height, 6); T++) {
+    let spread = new Set(parents.filter(d => d.depth < T));
+    let cur = layoutWith(spread);
+    for (let pass = 0; pass < 4; pass++) {
+      let improved = false;
+      for (const d of candidates) {
+        const next = new Set(spread);
+        if (next.has(d)) next.delete(d); else next.add(d);
+        const m = layoutWith(next);
+        if (m.s > cur.s * 1.001) { cur = m; spread = next; improved = true; }
+      }
+      if (!improved) break;
+    }
+    if (!best || cur.s > best.s) best = cur;
+  }
+  const { dim, s, w, h } = best;
+  const tg = el('g', { transform: `translate(${fmt(area.x + (area.w - w * s) / 2)} ${fmt(area.y + (area.h - h * s) / 2)}) scale(${fmt(s)})` }, g);
+  const pos = new Map();
+  (function place(d, x, y) {
+    const m = dim.get(d), w0 = bw.get(d);
+    if (!d.children) { pos.set(d, { x, y }); return; }
+    if (m.stacked) {
+      pos.set(d, { x, y });
+      let cy = y + BOX_H;
+      for (const c of d.children) { cy += GAP_V; place(c, x + IND, cy); cy += dim.get(c).h; }
+    } else {
+      pos.set(d, { x: x + (m.w - w0) / 2, y });
+      let cx = x + (m.w - m.row) / 2;
+      for (const c of d.children) { place(c, cx, y + BOX_H + LEVEL); cx += dim.get(c).w; cx += GAP_H; }
+    }
+  })(root, 0, 0);
+  const line = { fill: 'none', stroke: '#000000', 'stroke-width': 0.5 };
+  for (const d of nodes) {
+    if (!d.children) continue;
+    const p = pos.get(d), pw = bw.get(d);
+    if (dim.get(d).stacked) {
+      const lx = p.x + IND / 2, last = pos.get(d.children[d.children.length - 1]);
+      el('path', { ...line, d: `M${fmt(lx)},${fmt(p.y + BOX_H)} V${fmt(last.y + BOX_H / 2)}` }, tg);
+      for (const c of d.children) { const q = pos.get(c); el('path', { ...line, d: `M${fmt(lx)},${fmt(q.y + BOX_H / 2)} H${fmt(q.x)}` }, tg); }
+    } else {
+      const cx = p.x + pw / 2, my = p.y + BOX_H + LEVEL / 2;
+      const xs = d.children.map(c => pos.get(c).x + bw.get(c) / 2);
+      el('path', { ...line, d: `M${fmt(cx)},${fmt(p.y + BOX_H)} V${fmt(my)} M${fmt(Math.min(...xs))},${fmt(my)} H${fmt(Math.max(...xs))}` }, tg);
+      for (const x of xs) el('path', { ...line, d: `M${fmt(x)},${fmt(my)} V${fmt(my + LEVEL / 2)}` }, tg);
+    }
+  }
+  for (const d of nodes) {
+    const p = pos.get(d), pw = bw.get(d);
+    el('rect', { class: 'box', x: fmt(p.x), y: fmt(p.y), width: fmt(pw), height: fmt(BOX_H), rx: FS * 0.25,
+      fill: '#FFFFFF', stroke: '#000000', 'stroke-width': 0.6 }, tg);
+    nameText(tg, d, { x: p.x + pw / 2, y: p.y + BOX_H / 2, size: size(d), theme, weight: weight(d), anchor: 'middle' });
+  }
+  return FS * s;
+}
+
 // ── Круг: предок в центре, поколения — кольца ───────────────────────────
-function fan(g, root, area, theme) {
+function fan(g, root, area, theme, palette = 'earth') {
+  const ring = (FAN_PALETTES.find(p => p.id === palette) ?? FAN_PALETTES[0]).colors;
   const R = Math.min(area.w, area.h) / 2, cx = area.x + area.w / 2, cy = area.y + area.h / 2;
   const maxDepth = Math.max(1, root.height);
   const r0 = R * 0.13, rw = (R - r0) / maxDepth;
@@ -164,9 +261,9 @@ function fan(g, root, area, theme) {
 
   for (const d of root.descendants().slice(1)) {
     const inner = r0 + (d.depth - 1) * rw, outer = inner + rw;
-    const color = theme.ring[(branchIndex.get(branchOf(d)) ?? 0) % theme.ring.length];
+    const color = ring[(branchIndex.get(branchOf(d)) ?? 0) % ring.length];
     const path = arc({ innerRadius: inner, outerRadius: outer, startAngle: d.x0, endAngle: d.x1, padAngle: 0 });
-    el('path', { d: path, transform: `translate(${fmt(cx)} ${fmt(cy)})`, fill: color, 'fill-opacity': fmt(Math.max(0.18, 0.75 - d.depth * 0.09)),
+    el('path', { class: 'arc', d: path, transform: `translate(${fmt(cx)} ${fmt(cy)})`, fill: color, 'fill-opacity': fmt(Math.max(0.18, 0.75 - d.depth * 0.09)),
       stroke: theme.line, 'stroke-width': fmt(Math.max(0.15, R * 0.0012)) }, g);
     const a = (d.x0 + d.x1) / 2, rm = (inner + outer) / 2;
     const arcLen = (d.x1 - d.x0) * rm;
@@ -182,7 +279,7 @@ function fan(g, root, area, theme) {
   return minFont;
 }
 
-export function renderPoster(rootNode, { design = 'classic', paper = 'A0', title = '', subtitle = '' } = {}) {
+export function renderPoster(rootNode, { design = 'classic', paper = 'A0', title = '', subtitle = '', palette = 'earth' } = {}) {
   const [W, H] = PAPER[paper];
   const theme = THEMES[design];
   const svg = el('svg', { xmlns: NS, viewBox: `0 0 ${W} ${H}`, width: `${W}mm`, height: `${H}mm` });
@@ -206,9 +303,9 @@ export function renderPoster(rootNode, { design = 'classic', paper = 'A0', title
   const g = el('g', {}, svg);
   const root = d3.hierarchy(rootNode, d => d.children && d.children.length ? d.children : null);
   const minFont = design === 'classic' ? classic(g, root, area, theme)
-    : design === 'topdown' ? vertical(g, root, area, theme, { up: false, boxes: true })
+    : design === 'topdown' ? topdown(g, root, area, theme)
     : design === 'gold' ? vertical(g, root, area, theme, { up: true, boxes: false })
-    : fan(g, root, area, theme);
+    : fan(g, root, area, theme, palette);
   svg.dataset.minFont = String(minFont);
   if (minFont < MIN_FONT_MM) svg.dataset.tiny = '1';
   return svg;
