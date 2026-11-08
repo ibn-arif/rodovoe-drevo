@@ -56,3 +56,16 @@ test('panel and dialogs explain themselves', async ({ page, context }) => {
   await page.getByRole('button', { name: 'Плакат PDF' }).click();
   await expect(page.locator('#poster')).toContainText('A4 — обычный лист для домашнего принтера');
 });
+
+test('intro button keeps its size when the dialog is tall (Safari)', async ({ page, context }) => {
+  const s = await seed();
+  await installFakeApi(context, s.backend, { intro: true });
+  await page.goto('tree.html#t=' + s.o);
+  // Safari задаёт окну высоту; повторяем это, чтобы проверить, что строки не растягиваются.
+  await page.locator('#intro').evaluate(d => { d.style.height = '900px'; d.style.maxHeight = 'none'; });
+  const btn = await page.locator('#intro button').boundingBox();
+  expect(btn.height).toBeLessThan(60);
+  // Между пунктами нет растянутых пустот: следующий начинается сразу под предыдущим.
+  const gap = await page.locator('#intro li').evaluateAll(els => els[1].getBoundingClientRect().top - els[0].getBoundingClientRect().bottom);
+  expect(gap).toBeLessThan(16);
+});

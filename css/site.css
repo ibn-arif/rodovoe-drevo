@@ -246,7 +246,9 @@ h1, h2, h3 { font-family: var(--sans); letter-spacing: -.02em; }
 .bar { border-bottom: 0; box-shadow: 0 1px 0 var(--rule); }
 
 /* ── Подсказки для новичков ── */
-.intro[open] { display: grid; gap: 12px; justify-items: start; max-height: calc(100dvh - 32px); overflow: auto; }
+.intro[open] { display: grid; gap: 12px; justify-items: start; align-content: start; height: auto; max-height: calc(100dvh - 32px); overflow: auto; }
+.dlg form, .dlg .help-body { align-content: start; }
+.dlg .btn { align-self: start; }
 .intro h2 { font-size: 18px; }
 .intro ul, .help-body ul { margin: 6px 0 0; padding-left: 1.2em; display: grid; gap: 6px; }
 .help-body { padding: 0 20px 20px; }
