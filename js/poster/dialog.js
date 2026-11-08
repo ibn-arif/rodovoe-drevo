@@ -14,6 +14,7 @@ export function initPoster(getSnapshot, getTitle) {
     design: dlg.querySelector('input[name=design]:checked').value,
     paper: dlg.querySelector('input[name=paper]:checked').value,
     palette: dlg.querySelector('input[name=palette]:checked').value,
+    tiles: dlg.querySelector('input[name=tiles]:checked').value || null,
   });
   function svgFor() {
     const { design, paper, palette } = chosen();
@@ -23,6 +24,10 @@ export function initPoster(getSnapshot, getTitle) {
   }
   function update() {
     dlg.querySelector('#palette-box').hidden = chosen().design !== 'fan';
+    // Лента — только для «Сверху вниз»; если выбрали другой дизайн, возвращаемся к A0.
+    const roll = dlg.querySelector('#roll-option');
+    roll.hidden = chosen().design !== 'topdown';
+    if (roll.hidden && chosen().paper === 'ROLL') dlg.querySelector('input[name=paper][value=A0]').checked = true;
     const svg = svgFor();
     svg.removeAttribute('width');
     svg.removeAttribute('height');
@@ -39,8 +44,9 @@ export function initPoster(getSnapshot, getTitle) {
     const before = status.textContent;
     status.textContent = 'Готовлю плакат…';
     try {
-      const blob = await posterPdf(svgFor(), paper);
-      download(blob, posterFileName(getTitle(), design, paper));
+      const { tiles } = chosen();
+      const blob = await posterPdf(svgFor(), paper, tiles);
+      download(blob, posterFileName(getTitle(), design, paper, tiles));
       status.textContent = before;
     } catch {
       status.textContent = 'Не удалось собрать PDF. Проверьте интернет и попробуйте ещё раз.';

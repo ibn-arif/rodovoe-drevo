@@ -77,7 +77,7 @@ test('download a fan poster on A3', async ({ page, context }) => {
   await page.goto('tree.html#t=' + s.v);
   await page.getByRole('button', { name: 'Плакат PDF' }).click();
   await page.getByRole('radio', { name: 'Круг' }).check();
-  await page.getByRole('radio', { name: 'A3' }).check();
+  await page.getByRole('radio', { name: 'A3', exact: true }).check();
   const [download] = await Promise.all([
     page.waitForEvent('download', { timeout: 60_000 }),
     page.getByRole('button', { name: 'Скачать PDF' }).click(),
@@ -180,4 +180,52 @@ test('palette choice appears only for the fan', async ({ page, context }) => {
   await expect(page.getByRole('group', { name: 'Палитра' })).toBeVisible();
   await page.getByRole('radio', { name: 'Море' }).check();
   await expect(page.locator('#poster-preview path.arc').first()).toHaveAttribute('fill', /#/);
+});
+
+test('roll paper: 84 cm high, long enough for ~4 mm names, capped at 5 m', async ({ page }) => {
+  await synthetic(page);
+  const r = await page.evaluate(async src => {
+    const { renderPoster } = await import('/js/poster/layouts.js');
+    const out = {};
+    for (const n of [12, 120, 400]) {
+      const svg = renderPoster(eval(src)(n), { design: 'topdown', paper: 'ROLL', title: 'Род Али' });
+      const [, , w, h] = svg.getAttribute('viewBox').split(' ').map(Number);
+      out[n] = { w, h, font: Number(svg.dataset.minFont) };
+    }
+    return out;
+  }, makeTreeFn);
+  for (const n of [12, 120, 400]) expect(r[n].h).toBe(841);
+  expect(r[12].w).toBe(1189);                       // маленькое древо — не короче A0
+  expect(r[120].font).toBeGreaterThan(3.5);
+  expect(r[120].w).toBeLessThanOrEqual(5000);
+  expect(r[400].w).toBeLessThanOrEqual(5000);
+});
+
+test('tiles: one poster split into A4 sheets with glue margins', async ({ page }) => {
+  await synthetic(page);
+  const r = await page.evaluate(async src => {
+    const { renderPoster } = await import('/js/poster/layouts.js');
+    const { posterPdf, tileGrid } = await import('/js/poster/pdf.js');
+    const svg = renderPoster(eval(src)(30), { design: 'classic', paper: 'A2', title: 'Род Али' });
+    const grid = tileGrid(420, 594, 'A4');
+    const blob = await posterPdf(svg, 'A2', 'A4');
+    const text = new TextDecoder('latin1').decode(new Uint8Array(await blob.arrayBuffer()));
+    return { grid, pages: (text.match(/\/Type \/Page[^s]/g) || []).length, size: blob.size };
+  }, makeTreeFn);
+  expect(r.grid.cols * r.grid.rows).toBe(r.pages);
+  expect(r.pages).toBeGreaterThanOrEqual(4);
+  expect(r.size).toBeLessThan(6_000_000);
+});
+
+test('dialog offers roll only for top-down and a print-on-sheets choice', async ({ page, context }) => {
+  const s = await seed();
+  await installFakeApi(context, s.backend);
+  await page.goto('tree.html#t=' + s.v);
+  await page.getByRole('button', { name: 'Плакат PDF' }).click();
+  await expect(page.getByRole('radio', { name: 'Лента 84 см' })).toBeHidden();
+  await page.getByRole('radio', { name: 'Сверху вниз' }).check();
+  await page.getByRole('radio', { name: 'Лента 84 см' }).check();
+  await page.getByRole('radio', { name: 'Листами A4' }).check();
+  const [download] = await Promise.all([page.waitForEvent('download', { timeout: 60_000 }), page.getByRole('button', { name: 'Скачать PDF' }).click()]);
+  expect(download.suggestedFilename()).toMatch(/_topdown_ROLL_A4-sheets\.pdf$/);
 });

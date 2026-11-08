@@ -28,11 +28,22 @@ async function ready() {
   return fontData;
 }
 
-export async function posterPdf(svg, paper) {
+// Сетка листов для печати по частям: поля склейки по 10 мм, ориентация — та, где листов меньше.
+const GLUE = 10;
+export function tileGrid(W, H, sheet) {
+  const [a, b] = PAPER[sheet];
+  const count = (w, h) => ({ cols: Math.ceil((W - GLUE) / (w - GLUE)), rows: Math.ceil((H - GLUE) / (h - GLUE)), w, h });
+  const p = count(a, b), l = count(b, a);
+  return p.cols * p.rows <= l.cols * l.rows ? p : l;
+}
+
+export async function posterPdf(svg, paper, tiles = null) {
   const fonts = await ready();
-  // Размер берём из самого плаката: «Сверху вниз» может быть альбомным.
+  // Размер берём из самого плаката: «Сверху вниз» может быть альбомным или лентой.
   const [, , W, H] = svg.getAttribute('viewBox').split(' ').map(Number);
-  const doc = new jspdf.jsPDF({ unit: 'mm', format: [W, H], orientation: W > H ? 'landscape' : 'portrait', compress: true });
+  const grid = tiles ? tileGrid(W, H, tiles) : null;
+  const first = grid ? [grid.w, grid.h] : [W, H];
+  const doc = new jspdf.jsPDF({ unit: 'mm', format: first, orientation: first[0] > first[1] ? 'landscape' : 'portrait', compress: true });
   FONTS.forEach(([file, style, weight], i) => {
     doc.addFileToVFS(file, fonts[i]);
     doc.addFont(file, 'PTSerif', style, weight);
@@ -46,7 +57,27 @@ export async function posterPdf(svg, paper) {
   holder.append(svg);
   document.body.append(holder);
   try {
-    await doc.svg(svg, { x: 0, y: 0, width: W, height: H });
+    if (!grid) {
+      await doc.svg(svg, { x: 0, y: 0, width: W, height: H });
+    } else {
+      // Каждый лист — тот же плакат со сдвигом; всё, что за краем листа, отсекается.
+      const n = grid.cols * grid.rows;
+      for (let r = 0, k = 0; r < grid.rows; r++) for (let c = 0; c < grid.cols; c++, k++) {
+        if (k > 0) doc.addPage([grid.w, grid.h], grid.w > grid.h ? 'landscape' : 'portrait');
+        const ox = c * (grid.w - GLUE), oy = r * (grid.h - GLUE);
+        await doc.svg(svg, { x: -ox, y: -oy, width: W, height: H });
+        // Подпись листа и линия склейки.
+        doc.setFont('PTSerif', 'normal');
+        doc.setFontSize(7);
+        doc.setTextColor(120);
+        doc.text(`Лист ${k + 1} из ${n} · ряд ${r + 1}, столбец ${c + 1}`, 4, grid.h - 3);
+        doc.setDrawColor(150);
+        doc.setLineDashPattern([1.5, 1.5], 0);
+        if (c < grid.cols - 1) doc.line(grid.w - GLUE, 0, grid.w - GLUE, grid.h);
+        if (r < grid.rows - 1) doc.line(0, grid.h - GLUE, grid.w, grid.h - GLUE);
+        doc.setLineDashPattern([], 0);
+      }
+    }
   } finally {
     holder.remove();
   }
@@ -56,11 +87,11 @@ export async function posterPdf(svg, paper) {
 const TRANSLIT = { а: 'a', б: 'b', в: 'v', г: 'g', д: 'd', е: 'e', ё: 'e', ж: 'zh', з: 'z', и: 'i', й: 'y', к: 'k', л: 'l', м: 'm', н: 'n', о: 'o',
   п: 'p', р: 'r', с: 's', т: 't', у: 'u', ф: 'f', х: 'h', ц: 'c', ч: 'ch', ш: 'sh', щ: 'sch', ъ: '', ы: 'y', ь: '', э: 'e', ю: 'yu', я: 'ya', ӏ: 'i' };
 
-export function posterFileName(title, design, paper) {
+export function posterFileName(title, design, paper, tiles = null) {
   const t = String(title).toLowerCase().replace(/^род\s+/, '').split('').map(c => TRANSLIT[c] ?? c).join('')
     .replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 40) || 'drevo';
   const cap = t.charAt(0).toUpperCase() + t.slice(1);
-  return `Rod_${cap}_${design}_${paper}.pdf`;
+  return `Rod_${cap}_${design}_${paper}${tiles ? `_${tiles}-sheets` : ''}.pdf`;
 }
 
 export function download(blob, name) {

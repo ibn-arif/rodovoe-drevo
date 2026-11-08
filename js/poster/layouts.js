@@ -10,6 +10,8 @@ export const DESIGNS = [
   { id: 'gold', title: 'Тёмный с золотом' },
 ];
 export const MIN_FONT_MM = 1.2;
+// Лента для рулонной печати (плоттер): высота 84 см, длина по древу.
+export const ROLL = { height: 841, maxWidth: 5000, font: 4 };
 export const FAN_PALETTES = [
   { id: 'earth', title: 'Земля', colors: ['#8B2D3B', '#C9A35B', '#5E7F6E', '#6F5E96', '#3F6E8C', '#B8693A'] },
   { id: 'garden', title: 'Сад', colors: ['#2F6B45', '#7FA650', '#A7C4A0', '#3E7C6E', '#C2B04A', '#5C8A3A'] },
@@ -278,24 +280,31 @@ function fan(g, root, area, theme, palette = 'earth') {
 
 export function renderPoster(rootNode, { design = 'classic', paper = 'A0', title = '', subtitle = '', palette = 'earth' } = {}) {
   const root = d3.hierarchy(rootNode, d => d.children && d.children.length ? d.children : null);
-  let [W, H] = PAPER[paper];
   const tdm = design === 'topdown' ? topdownMeasure(root) : null;
+  let [W, H] = PAPER[paper] ?? PAPER.A0;
   if (tdm && tdm.w > tdm.h) [W, H] = [H, W];   // широкая схема — альбомный лист
+  // Поля, заголовок и подзаголовок считаются от короткой стороны листа.
+  const U = Math.min(W, H), m = U * 0.045, titleSize = U * 0.05, ss = U * 0.015;
+  const headH = m + titleSize * 1.45 + (subtitle ? ss * 1.6 : 0);
+  if (paper === 'ROLL' && tdm) {
+    // Лента: высота 84 см, длина такая, чтобы имена были около 4 мм (не короче A0 и не длиннее 5 м).
+    H = ROLL.height;
+    const areaH = H - headH - m * 2;
+    const scale = Math.min(ROLL.font / TD.FS, areaH / tdm.h);
+    W = Math.round(Math.min(ROLL.maxWidth, Math.max(PAPER.A0[1], tdm.w * scale + m * 2)));
+  }
   const theme = THEMES[design];
   const svg = el('svg', { xmlns: NS, viewBox: `0 0 ${W} ${H}`, width: `${W}mm`, height: `${H}mm` });
   el('rect', { x: 0, y: 0, width: W, height: H, fill: theme.bg }, svg);
-  const m = W * 0.045;
   if (design === 'gold') {
-    el('rect', { x: m * 0.5, y: m * 0.5, width: W - m, height: H - m, fill: 'none', stroke: theme.frame, 'stroke-width': W * 0.0016 }, svg);
-    el('rect', { x: m * 0.68, y: m * 0.68, width: W - m * 1.36, height: H - m * 1.36, fill: 'none', stroke: theme.frame, 'stroke-width': W * 0.0007, 'stroke-dasharray': `${W * 0.004} ${W * 0.003}` }, svg);
+    el('rect', { x: m * 0.5, y: m * 0.5, width: W - m, height: H - m, fill: 'none', stroke: theme.frame, 'stroke-width': U * 0.0016 }, svg);
+    el('rect', { x: m * 0.68, y: m * 0.68, width: W - m * 1.36, height: H - m * 1.36, fill: 'none', stroke: theme.frame, 'stroke-width': U * 0.0007, 'stroke-dasharray': `${U * 0.004} ${U * 0.003}` }, svg);
   } else if (design === 'classic') {
-    el('rect', { x: m * 0.55, y: m * 0.55, width: W - m * 1.1, height: H - m * 1.1, fill: 'none', stroke: theme.frame, 'stroke-width': W * 0.0017 }, svg);
+    el('rect', { x: m * 0.55, y: m * 0.55, width: W - m * 1.1, height: H - m * 1.1, fill: 'none', stroke: theme.frame, 'stroke-width': U * 0.0017 }, svg);
   }
-  const titleSize = W * 0.05;
   el('text', { x: W / 2, y: m + titleSize, 'font-family': FONT, 'font-size': fmt(titleSize), 'font-weight': 700, fill: theme.ink, 'text-anchor': 'middle' }, svg).textContent = title;
   let top = m + titleSize * 1.45;
   if (subtitle) {
-    const ss = W * 0.015;
     el('text', { x: W / 2, y: fmt(top + ss * 0.4), 'font-family': FONT, 'font-size': fmt(ss), 'font-style': 'italic', fill: theme.muted, 'text-anchor': 'middle' }, svg).textContent = subtitle;
     top += ss * 1.6;
   }

@@ -123,6 +123,13 @@
         <label><input type="radio" name="paper" value="A2"> A2</label>
         <label><input type="radio" name="paper" value="A3"> A3</label>
         <label><input type="radio" name="paper" value="A4"> A4</label>
+        <label id="roll-option" hidden><input type="radio" name="paper" value="ROLL"> Лента 84 см</label>
+      </fieldset>
+      <fieldset class="choice">
+        <legend>Как печатать</legend>
+        <label><input type="radio" name="tiles" value="" checked> Одним листом</label>
+        <label><input type="radio" name="tiles" value="A3"> Листами A3</label>
+        <label><input type="radio" name="tiles" value="A4"> Листами A4</label>
       </fieldset>
       <fieldset class="choice" id="palette-box" hidden>
         <legend>Палитра</legend>
@@ -133,6 +140,7 @@
         <label><input type="radio" name="palette" value="graphite"> Графит</label>
       </fieldset>
       <p class="muted small">A4 — обычный лист для домашнего принтера, A3 — вдвое больше. A2, A1 и A0 — плакаты: их печатают в копицентре или типографии. Чем больше людей в древе, тем больше нужен лист.</p>
+      <p class="muted small">«Лента 84 см» — для большого древа «Сверху вниз»: длинный плакат, его печатают на рулонном плоттере в типографии. «Листами A4/A3» — тот же плакат по частям: распечатайте дома и склейте по пунктирным линиям, номер листа внизу.</p>
       <p class="muted small">«Классика» и «Сверху вниз» хорошо читаются на больших древах. «Круг» красивее всего для небольших семей.</p>
       <p id="poster-status" class="muted" aria-live="polite"></p>
       <button class="btn btn-primary" id="poster-download" type="button">Скачать PDF</button>
