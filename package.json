@@ -1,0 +1,16 @@
+{
+  "name": "rodovoe-drevo",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test:unit": "node --test \"tests/unit/*.test.mjs\"",
+    "test:sql": "node --test --test-concurrency=1 \"tests/sql/*.test.mjs\"",
+    "test:e2e": "playwright test",
+    "test": "npm run test:unit && npm run test:sql && npm run test:e2e"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "^0.5.15",
+    "@playwright/test": "^1.65.0",
+    "postgres": "^4.1.0"
+  }
+}
