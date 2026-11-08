@@ -383,6 +383,147 @@ begin
   return jsonb_build_object('ok', true, 'save_id', v_save, 'version', v_version);
 end $$;
 
+-- ── История и откат ──────────────────────────────────────────────────
+
+-- Отменяет одну запись журнала, пишет отмену как новую запись в p_save.
+create or replace function drevo_private.undo_edit(p_tree uuid, p_save bigint, p_author text, p_edit edits) returns void
+language plpgsql as $$
+declare
+  v_edit bigint; v_type text := p_edit.op ->> 'type'; v_ids uuid[]; v_id uuid; v_old jsonb;
+begin
+  insert into edits(save_id, op, people)
+    values (p_save, jsonb_build_object('type', 'revert', 'of', p_edit.id, 'kind', v_type), p_edit.people)
+    returning id into v_edit;
+
+  if v_type = 'add_child' then
+    v_id := (p_edit.after ->> 'id')::uuid;
+    with recursive sub(id) as (
+      select id from people where id = v_id and deleted_by is null
+      union all
+      select c.id from people c join sub on c.parent_id = sub.id where c.deleted_by is null)
+    select array_agg(id) into v_ids from sub;
+    update people set deleted_by = v_edit, updated_by = p_author, updated_at = now() where id = any(v_ids);
+
+  elsif v_type = 'add_parent' then
+    v_old := p_edit.before -> 'child';
+    update people set parent_id = null, pos = (v_old ->> 'pos')::int, updated_by = p_author, updated_at = now()
+     where id = (v_old ->> 'id')::uuid;
+    update trees set root_id = (p_edit.before ->> 'root_id')::uuid where id = p_tree;
+    update people set deleted_by = v_edit, updated_by = p_author, updated_at = now()
+     where id = (p_edit.after -> 'person' ->> 'id')::uuid and deleted_by is null;
+
+  elsif v_type = 'update' then
+    update people set
+      name = case when p_edit.op ? 'name' then p_edit.before ->> 'name' else name end,
+      spouse = case when p_edit.op ? 'spouse' then p_edit.before ->> 'spouse' else spouse end,
+      updated_by = p_author, updated_at = now()
+     where id = (p_edit.before ->> 'id')::uuid;
+
+  elsif v_type = 'move' then
+    v_id := (p_edit.before ->> 'parent_id')::uuid;
+    if not exists (select 1 from people where id = v_id and deleted_by is null) then
+      raise exception 'cannot_revert';
+    end if;
+    update people set parent_id = v_id, pos = (p_edit.before ->> 'pos')::int, updated_by = p_author, updated_at = now()
+     where id = (p_edit.before ->> 'id')::uuid;
+
+  elsif v_type = 'delete' then
+    update people set deleted_by = null, updated_by = p_author, updated_at = now() where deleted_by = p_edit.id;
+
+  elsif v_type = 'marry' then
+    update marriages set deleted_by = v_edit where id = (p_edit.after ->> 'id')::uuid and deleted_by is null;
+
+  elsif v_type = 'unmarry' then
+    update marriages set deleted_by = null where id = (p_edit.before ->> 'id')::uuid;
+
+  else
+    raise exception 'bad_op';
+  end if;
+
+  update edits set reverted_by = p_save where id = p_edit.id;
+end $$;
+
+create or replace function public.revert(p_token text, p_author text, p_save_id bigint, p_edit_id bigint default null)
+returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare
+  r record; v_author text; v_orig saves; v_save bigint; v_version bigint; e edits;
+  v_people uuid[]; v_warn jsonb; v_count int := 0;
+begin
+  select * into r from drevo_private.role(p_token);
+  if r.role <> 'owner' then raise exception 'forbidden'; end if;
+  v_author := drevo_private.clean_name(p_author);
+  perform 1 from trees where id = r.tree_id for update;
+  select * into v_orig from saves where id = p_save_id and tree_id = r.tree_id;
+  if v_orig.id is null or v_orig.reverts_save is not null then raise exception 'bad_op'; end if;
+  if p_edit_id is not null and not exists (select 1 from edits where id = p_edit_id and save_id = p_save_id) then
+    raise exception 'bad_op';
+  end if;
+
+  select array_agg(distinct pid) into v_people
+    from edits, unnest(edits.people) pid
+   where save_id = p_save_id and reverted_by is null and (p_edit_id is null or id = p_edit_id);
+
+  select jsonb_agg(w) into v_warn from (
+    select distinct on (p.id) jsonb_build_object('person_id', p.id, 'name', p.name, 'by', s.author, 'at', s.created_at) w
+      from unnest(v_people) pid
+      join people p on p.id = pid
+      join edits x on pid = any(x.people)
+      join saves s on s.id = x.save_id and s.tree_id = r.tree_id and s.id > p_save_id
+     order by p.id, s.id desc) q;
+
+  update trees set version = version + 1 where id = r.tree_id returning version into v_version;
+  insert into saves(tree_id, author, version, reverts_save, reverts_edit)
+    values (r.tree_id, v_author, v_version, p_save_id, p_edit_id) returning id into v_save;
+
+  for e in select * from edits where save_id = p_save_id and reverted_by is null
+             and (p_edit_id is null or id = p_edit_id) order by id desc loop
+    perform drevo_private.undo_edit(r.tree_id, v_save, v_author, e);
+    v_count := v_count + 1;
+  end loop;
+  if v_count = 0 then raise exception 'already_reverted'; end if;
+
+  return jsonb_build_object('ok', true, 'save_id', v_save, 'version', v_version,
+                            'warnings', coalesce(v_warn, '[]'::jsonb));
+end $$;
+
+create or replace function public.get_history(p_token text, p_limit int default 50, p_before bigint default null)
+returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare r record;
+begin
+  select * into r from drevo_private.role(p_token);
+  if r.role not in ('owner', 'edit') then raise exception 'forbidden'; end if;
+  return coalesce((
+    select jsonb_agg(x order by (x ->> 'save_id')::bigint desc) from (
+      select jsonb_build_object(
+        'save_id', s.id, 'author', s.author, 'at', s.created_at,
+        'reverts_save', s.reverts_save, 'reverts_edit', s.reverts_edit,
+        'reverted_by', (select case when bool_and(e.reverted_by is not null) then max(e.reverted_by) end
+                          from edits e where e.save_id = s.id),
+        'edits', (select jsonb_agg(jsonb_build_object('edit_id', e.id, 'op', e.op, 'before', e.before,
+                    'after', e.after, 'reverted_by', e.reverted_by) order by e.id)
+                    from edits e where e.save_id = s.id)) x
+        from saves s
+       where s.tree_id = r.tree_id and (p_before is null or s.id < p_before)
+       order by s.id desc
+       limit least(greatest(coalesce(p_limit, 50), 1), 200)) q), '[]'::jsonb);
+end $$;
+
+create or replace function public.deleted_items(p_token text) returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare r record;
+begin
+  select * into r from drevo_private.role(p_token);
+  if r.role <> 'owner' then raise exception 'forbidden'; end if;
+  return coalesce((
+    select jsonb_agg(jsonb_build_object('edit_id', e.id, 'save_id', s.id, 'person_id', e.op ->> 'person_id',
+             'name', e.before ->> 'name', 'count', (e.after ->> 'count')::int, 'by', s.author, 'at', s.created_at)
+             order by e.id desc)
+      from edits e join saves s on s.id = e.save_id
+     where s.tree_id = r.tree_id and e.op ->> 'type' = 'delete' and e.reverted_by is null), '[]'::jsonb);
+end $$;
+
 -- По умолчанию Postgres даёт EXECUTE всем; открываем только нужное.
 revoke execute on all functions in schema public from public, anon, authenticated;
 revoke execute on all functions in schema drevo_private from public, anon, authenticated;
@@ -391,3 +532,6 @@ grant execute on function public.create_tree(text, text, text, text, text) to an
 grant execute on function public.open_tree(text) to anon, authenticated;
 grant execute on function public.tree_version(text) to anon, authenticated;
 grant execute on function public.save_changes(text, text, bigint, jsonb, boolean) to anon, authenticated;
+grant execute on function public.revert(text, text, bigint, bigint) to anon, authenticated;
+grant execute on function public.get_history(text, int, bigint) to anon, authenticated;
+grant execute on function public.deleted_items(text) to anon, authenticated;
