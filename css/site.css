@@ -28,18 +28,18 @@
   src: url(../vendor/fonts/pt-serif-cyrillic-ext-400-italic.woff2) format("woff2"); unicode-range: U+0460-052F, U+1C80-1C88, U+20B4, U+2DE0-2DFF, U+A640-A69F, U+FE2E-FE2F; }
 
 :root {
-  --paper: #EEF0EC;
-  --sheet: #F8F9F6;
-  --ink: #1E2624;
-  --muted: #56615D;
-  --rule: #C3CAC4;
-  --madder: #8B2D3B;
-  --madder-soft: #F3E2E5;
-  --gold: #76580F;
-  --branch: #7F8B85;
+  --paper: #FFFFFF;
+  --sheet: #F5F7F2;
+  --ink: #1A231C;
+  --muted: #5C6B5F;
+  --rule: #D7DED5;
+  --madder: #2F6B45;
+  --madder-soft: #E1EFE5;
+  --gold: #8C6D1F;
+  --branch: #9AAD9E;
   --ok: #2F6B4F;
   --danger: #9B2226;
-  --draft: #B7791F;
+  --draft: #C26A1B;
   --serif: "PT Serif", Georgia, "Times New Roman", serif;
   --sans: "PT Sans", "Segoe UI", Roboto, Arial, sans-serif;
   --shadow: 0 -6px 24px rgba(20, 30, 28, .16);
@@ -47,15 +47,15 @@
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --paper: #151A19; --sheet: #1D2422; --ink: #E6EAE7; --muted: #A3ADA9; --rule: #39433F;
-    --madder: #E08A97; --madder-soft: #3A2328; --gold: #D9B45A; --branch: #6F7C76; --ok: #7CC4A0;
-    --danger: #F08A8D; --draft: #E8B04F; --shadow: 0 -6px 24px rgba(0, 0, 0, .5); color-scheme: dark;
+    --paper: #0F1411; --sheet: #161D18; --ink: #E4ECE6; --muted: #9CB0A2; --rule: #2B372F;
+    --madder: #7CCB98; --madder-soft: #1B2A20; --gold: #D9B45A; --branch: #4F6355; --ok: #7CC4A0;
+    --danger: #F08A8D; --draft: #F0A35A; --shadow: 0 -6px 24px rgba(0, 0, 0, .5); color-scheme: dark;
   }
 }
 :root[data-theme="dark"] {
-  --paper: #151A19; --sheet: #1D2422; --ink: #E6EAE7; --muted: #A3ADA9; --rule: #39433F;
-  --madder: #E08A97; --madder-soft: #3A2328; --gold: #D9B45A; --branch: #6F7C76; --ok: #7CC4A0;
-  --danger: #F08A8D; --draft: #E8B04F; --shadow: 0 -6px 24px rgba(0, 0, 0, .5); color-scheme: dark;
+  --paper: #0F1411; --sheet: #161D18; --ink: #E4ECE6; --muted: #9CB0A2; --rule: #2B372F;
+  --madder: #7CCB98; --madder-soft: #1B2A20; --gold: #D9B45A; --branch: #4F6355; --ok: #7CC4A0;
+  --danger: #F08A8D; --draft: #F0A35A; --shadow: 0 -6px 24px rgba(0, 0, 0, .5); color-scheme: dark;
 }
 
 *, *::before, *::after { box-sizing: border-box; }
@@ -71,8 +71,8 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .btn:hover { border-color: var(--branch); }
 .btn-primary { background: var(--madder); border-color: var(--madder); color: #fff; font-weight: 700; }
 .btn-primary:hover { filter: brightness(1.08); border-color: var(--madder); }
-:root[data-theme="dark"] .btn-primary { color: #1D1215; }
-@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .btn-primary { color: #1D1215; } }
+:root[data-theme="dark"] .btn-primary { color: var(--paper); }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .btn-primary { color: var(--paper); } }
 .btn-quiet { border-color: transparent; background: transparent; color: var(--madder); padding-inline: 8px; }
 .btn-danger { color: var(--danger); }
 .field { display: grid; gap: 6px; }
@@ -237,3 +237,10 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .seg button { appearance: none; border: 0; background: var(--sheet); color: var(--ink); padding: 0 14px; min-height: 46px; cursor: pointer; }
 .seg button + button { border-left: 1px solid var(--rule); }
 .seg button[aria-pressed="true"] { background: var(--madder); color: var(--paper); font-weight: 700; }
+
+/* ── Дизайн «Сад»: заголовки рублёным шрифтом, круглые кнопки ── */
+h1, h2, h3 { font-family: var(--sans); letter-spacing: -.02em; }
+.lede { font-family: var(--sans); }
+.btn { border-radius: 999px; padding-inline: 20px; }
+.input { border-radius: 14px; }
+.bar { border-bottom: 0; box-shadow: 0 1px 0 var(--rule); }
