@@ -64,6 +64,8 @@ export function initHistory(app) {
   function renderAll() {
     if (!saves.length) { body.replaceChildren(el('p', 'muted', 'Изменений пока нет.')); return; }
     const list = el('div', 'history-list');
+    if (!isOwner()) list.append(el('p', 'muted small', 'Здесь видно, кто и что менял. Откатить изменение может только создатель древа — если кто-то ошибся, напишите ему.'));
+    else list.append(el('p', 'muted small', '«Откатить» отменяет правку, но не стирает её: откат тоже попадёт в историю.'));
     for (const s of saves) {
       const box = el('section', 'save' + (s.reverts_save ? ' is-revert' : ''));
       const head = el('div', 'save-head');

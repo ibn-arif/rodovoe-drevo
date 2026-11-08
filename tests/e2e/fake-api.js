@@ -29,8 +29,12 @@ export async function createBackend() {
 }
 
 // Ставит API в контекст браузера; страницы, открытые после этого, используют backend.
-export async function installFakeApi(context, backend) {
+export async function installFakeApi(context, backend, { intro = false } = {}) {
   await context.exposeFunction('__fakeCall', (method, args) => backend.call(method, args));
+  // Подсказку первого визита в тестах страниц не показываем — её проверяет help.spec.
+  if (!intro) await context.addInitScript(() => {
+    try { for (const r of ['owner', 'edit', 'view']) localStorage.setItem('drevo:intro:' + r, '1'); } catch {}
+  });
   await context.addInitScript(methods => {
     const codes = ['tree_not_found', 'forbidden', 'bad_name', 'bad_op', 'bad_token', 'cycle', 'root_protected',
       'not_root', 'too_many_trees', 'too_many_saves', 'too_large', 'already_reverted', 'cannot_revert'];

@@ -244,3 +244,19 @@ h1, h2, h3 { font-family: var(--sans); letter-spacing: -.02em; }
 .btn { border-radius: 999px; padding-inline: 20px; }
 .input { border-radius: 14px; }
 .bar { border-bottom: 0; box-shadow: 0 1px 0 var(--rule); }
+
+/* ── Подсказки для новичков ── */
+.intro[open] { display: grid; gap: 12px; justify-items: start; max-height: calc(100dvh - 32px); overflow: auto; }
+.intro h2 { font-size: 18px; }
+.intro ul, .help-body ul { margin: 6px 0 0; padding-left: 1.2em; display: grid; gap: 6px; }
+.help-body { padding: 0 20px 20px; }
+.help-body h2 { font-size: 22px; }
+.hint { position: absolute; left: 12px; top: 12px; margin: 0; max-width: calc(100% - 24px); font-size: 13px; color: var(--muted);
+  background: var(--sheet); border: 1px solid var(--rule); border-radius: 999px; padding: 4px 12px; pointer-events: none; transition: opacity .6s; z-index: 1; }
+.hint.gone { opacity: 0; }
+@media (prefers-reduced-motion: reduce) { .hint { transition: none; } }
+.faq { margin-top: 48px; display: grid; gap: 8px; max-width: 720px; }
+.faq h2 { font-size: 24px; margin-bottom: 4px; }
+.faq details { border-top: 1px solid var(--rule); padding: 10px 0; }
+.faq summary { cursor: pointer; font-weight: 700; min-height: 32px; }
+.faq p { margin: 8px 0 0; color: var(--muted); }

@@ -22,6 +22,7 @@
     <button class="btn" id="invite" type="button" hidden>Пригласить родных</button>
     <button class="btn" id="history-btn" type="button" hidden>История</button>
     <button class="btn" id="poster-btn" type="button" hidden>Плакат PDF</button>
+    <button class="btn" id="help-btn" type="button">Помощь</button>
   </div>
   <div id="found" class="found" aria-live="polite"></div>
 </header>
@@ -35,13 +36,20 @@
   <p id="draft-volatile" class="muted small" hidden>Изменения не переживут закрытие вкладки.</p>
   <p id="draft-stale" class="error small" hidden>Часть изменений больше не подходит к древу — кто-то уже поменял этих людей. Уберите их из списка.</p>
   <div id="draft-details" hidden>
+    <p class="muted small">Пока вы не нажмёте «Сохранить», эти изменения видите только вы. Если закроете страницу, они останутся на этом устройстве.</p>
     <ol id="draft-list" class="draft-list"></ol>
     <button class="btn btn-quiet btn-danger" id="draft-clear" type="button">Отменить всё</button>
   </div>
 </section>
 
+<dialog id="intro" class="dlg intro" aria-label="Как пользоваться">
+  <div class="intro-body"></div>
+  <p class="muted small">Эта подсказка всегда есть под кнопкой «Помощь».</p>
+  <button class="btn btn-primary" type="button">Понятно</button>
+</dialog>
+
 <div class="work">
-  <main id="stage" class="stage" aria-label="Древо"></main>
+  <main id="stage" class="stage" aria-label="Древо"><p class="hint" id="nav-hint" aria-hidden="true"></p></main>
   <aside id="panel" class="panel" hidden aria-labelledby="panel-name"></aside>
 </div>
 <p id="fatal" class="fatal" hidden></p>
@@ -61,6 +69,14 @@
       <button class="btn btn-primary" id="save-confirm" type="button">Сохранить изменения</button>
     </div>
   </form>
+</dialog>
+
+<dialog id="help" class="dlg dlg-wide" aria-labelledby="help-title">
+  <div class="history-top">
+    <span id="help-title" class="muted">Как пользоваться</span>
+    <form method="dialog"><button class="btn btn-quiet" type="submit">Закрыть</button></form>
+  </div>
+  <div class="help-body"></div>
 </dialog>
 
 <dialog id="invite-dialog" class="dlg">
@@ -114,6 +130,8 @@
         <label><input type="radio" name="palette" value="sunset"> Закат</label>
         <label><input type="radio" name="palette" value="graphite"> Графит</label>
       </fieldset>
+      <p class="muted small">A4 — обычный лист для домашнего принтера, A3 — вдвое больше. A2, A1 и A0 — плакаты: их печатают в копицентре или типографии. Чем больше людей в древе, тем больше нужен лист.</p>
+      <p class="muted small">«Классика» и «Сверху вниз» хорошо читаются на больших древах. «Круг» красивее всего для небольших семей.</p>
       <p id="poster-status" class="muted" aria-live="polite"></p>
       <button class="btn btn-primary" id="poster-download" type="button">Скачать PDF</button>
     </div>

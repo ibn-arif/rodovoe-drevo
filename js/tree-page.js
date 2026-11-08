@@ -11,6 +11,7 @@ import { initDraftBar } from './draft-bar.js';
 import { renderShare } from './share.js';
 import { initHistory } from './history.js';
 import { initPoster } from './poster/dialog.js';
+import { initHelp } from './help.js';
 
 const $ = s => document.querySelector(s);
 const api = getApi();
@@ -135,6 +136,12 @@ async function main() {
 
   const canEdit = state.role === 'edit' || state.role === 'owner';
   $('#tools').hidden = false;
+  initHelp(state.role);
+  const hint = $('#nav-hint');
+  hint.textContent = matchMedia('(pointer: coarse)').matches
+    ? 'Двигайте древо пальцем, увеличивайте двумя пальцами'
+    : 'Перетаскивайте древо мышью, колёсико — масштаб';
+  setTimeout(() => hint.classList.add('gone'), 6000);
   $('#invite').hidden = !canEdit;
   $('#history-btn').hidden = !canEdit;
   $('#poster-btn').hidden = false;

@@ -94,19 +94,21 @@ export function renderPanel(el, ctx) {
     h('div', { class: 'field' },
       h('label', { for: spouseId }, 'Супруг или супруга не из этого рода'),
       h('div', { class: 'spwrap' }, h('div', { class: 'seg', role: 'group', 'aria-label': 'Кто' }, roleBtns), spouseIn),
-      help),
+      help,
+      h('span', { class: 'muted small' }, 'Здесь — супруг или супруга не из этого рода. Если супруг или супруга тоже есть в древе, нажмите «Брак с…».')),
     h('div', {}, h('button', { class: 'btn', type: 'submit' }, 'Применить')));
 
   // Маленькая форма «одно поле + кнопка».
-  const nameForm = (label, button, onName) => {
+  const nameForm = (label, button, onName, hint) => {
     const inp = input();
     sub.replaceChildren(h('form', { class: 'subform', on: { submit: e => { e.preventDefault(); onName(inp.value); } } },
+      hint ? h('p', { class: 'muted small' }, hint) : null,
       field(label, inp), h('div', { class: 'actions' }, h('button', { class: 'btn btn-primary', type: 'submit' }, button),
         btn('Отмена', () => sub.replaceChildren(), 'btn btn-quiet'))));
     inp.focus();
   };
   // Выбор человека из древа поиском.
-  const pickForm = (label, exclude, onPick) => {
+  const pickForm = (label, exclude, onPick, hint) => {
     const inp = input('', { type: 'search' });
     const list = h('div', { class: 'pick' });
     const fill = () => {
@@ -118,7 +120,7 @@ export function renderPanel(el, ctx) {
       }));
     };
     inp.addEventListener('input', fill);
-    sub.replaceChildren(h('div', { class: 'subform' }, field(label, inp), list,
+    sub.replaceChildren(h('div', { class: 'subform' }, hint ? h('p', { class: 'muted small' }, hint) : null, field(label, inp), list,
       h('div', {}, btn('Отмена', () => sub.replaceChildren(), 'btn btn-quiet'))));
     inp.focus();
   };
@@ -135,13 +137,13 @@ export function renderPanel(el, ctx) {
     })),
     isRoot ? btn('＋ родитель', () => nameForm('Имя родителя', 'Добавить', v => {
       if (apply({ type: 'add_parent', id: crypto.randomUUID(), child_id: p.id, name: v, spouse: '' })) sub.replaceChildren();
-    })) : null,
+    }, 'Впишите отца или мать самого верхнего человека — древо станет на поколение старше.')) : null,
     !isRoot ? btn('Перенести к…', () => pickForm('Новый родитель', branch(), id => {
       if (apply({ type: 'move', person_id: p.id, parent_id: id })) sub.replaceChildren();
-    })) : null,
+    }, 'Перенос нужен, если человек записан не у того родителя. Начните вводить имя нового родителя и выберите его из списка.')) : null,
     btn('Брак с…', () => pickForm('С кем брак', new Set([p.id, ...marriages.flatMap(m => [m.a_id, m.b_id])]), id => {
       if (apply({ type: 'marry', id: crypto.randomUUID(), a_id: p.id, b_id: id })) sub.replaceChildren();
-    })),
+    }, 'Нужно, когда оба супруга есть в этом древе — например, поженились родственники. Начните вводить имя и выберите из списка.')),
     !isRoot ? btn('Удалить', () => {
       const n = countBranch(s, p.id);
       sub.replaceChildren(h('div', { class: 'subform' },
