@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Родовое древо</title>
+<meta name="description" content="Соберите древо своей семьи вместе с роднёй: по одной ссылке, без регистрации. Плакат в PDF.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=PT+Sans:wght@400;700&display=swap">
+<link rel="stylesheet" href="css/site.css">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M6 16h6M12 16c4 0 4-8 8-8M12 16c4 0 4 8 8 8' fill='none' stroke='%238B2D3B' stroke-width='2.4'/%3E%3Ccircle cx='6' cy='16' r='3.5' fill='%238B2D3B'/%3E%3Ccircle cx='23' cy='8' r='3' fill='%238B2D3B'/%3E%3Ccircle cx='23' cy='24' r='3' fill='%238B2D3B'/%3E%3C/svg%3E">
+</head>
+<body>
+<main class="home wrap">
+  <section id="start" class="home-grid">
+    <div>
+      <h1>Родовое древо</h1>
+      <p class="lede">Соберите древо своей семьи вместе с роднёй. Каждый дописывает то, что помнит, — по одной ссылке, без регистрации.</p>
+      <form id="create" class="create" novalidate>
+        <div class="field">
+          <label for="root-name">Имя родоначальника</label>
+          <input id="root-name" class="input" name="root" autocomplete="off" maxlength="100" placeholder="Например, Магомед">
+        </div>
+        <div class="field">
+          <label for="tree-title">Название древа</label>
+          <input id="tree-title" class="input" name="title" autocomplete="off" maxlength="120" placeholder="Род Магомеда">
+        </div>
+        <p id="create-error" class="error" role="alert" hidden></p>
+        <div><button class="btn btn-primary" type="submit">Создать древо</button></div>
+      </form>
+      <p class="example"><a href="tree.html#t=romanovy">Посмотреть пример: Романовы, 1613–1917</a></p>
+    </div>
+    <svg class="sprig" viewBox="0 0 520 300" role="img" aria-label="Набросок древа с вашим родоначальником">
+      <path class="ln" d="M24 150 C110 150 110 70 196 70"/>
+      <path class="ln" d="M24 150 H196"/>
+      <path class="ln" d="M24 150 C110 150 110 230 196 230"/>
+      <path class="ln" d="M250 70 C320 70 320 40 390 40"/>
+      <path class="ln" d="M250 70 C320 70 320 100 390 100"/>
+      <path class="ln" d="M250 230 C320 230 320 200 390 200"/>
+      <path class="ln" d="M250 230 C320 230 320 260 390 260"/>
+      <circle class="dot" cx="24" cy="150" r="6"/>
+      <circle class="dot" cx="196" cy="70" r="4.5"/><circle class="dot" cx="196" cy="150" r="4.5"/><circle class="dot" cx="196" cy="230" r="4.5"/>
+      <circle class="dot" cx="390" cy="40" r="3.5"/><circle class="dot" cx="390" cy="100" r="3.5"/>
+      <circle class="dot" cx="390" cy="200" r="3.5"/><circle class="dot" cx="390" cy="260" r="3.5"/>
+      <text id="sprig-root" class="root-name" x="14" y="130">Родоначальник</text>
+      <text class="kin" x="206" y="75">сын</text><text class="kin" x="206" y="155">дочь</text><text class="kin" x="206" y="235">сын</text>
+      <text class="kin" x="400" y="45">внук</text><text class="kin" x="400" y="105">внучка</text>
+      <text class="kin" x="400" y="205">внук</text><text class="kin" x="400" y="265">…</text>
+    </svg>
+  </section>
+
+  <section id="done" hidden>
+    <h1 id="done-title"></h1>
+    <p class="lede">Древо создано. Отправьте родным ссылку, и они смогут дописывать его вместе с вами.</p>
+    <div id="share" class="share"></div>
+    <p style="margin-top:24px"><a id="open-tree" class="btn btn-primary" href="#" style="text-decoration:none;display:inline-block">Открыть древо</a></p>
+  </section>
+
+  <ol class="steps" id="steps">
+    <li><h2>Создайте древо</h2><p>Впишите родоначальника — с него начнётся древо.</p></li>
+    <li><h2>Позовите родных</h2><p>Отправьте ссылку в WhatsApp. Каждый добавит тех, кого знает, и нажмёт «Сохранить».</p></li>
+    <li><h2>Распечатайте</h2><p>Скачайте плакат в PDF — четыре дизайна, от A4 до A0.</p></li>
+  </ol>
+
+  <section id="mine" class="mine" hidden>
+    <h2>Мои древа</h2>
+    <ul id="mine-list"></ul>
+  </section>
+</main>
+<script type="module" src="js/create.js"></script>
+</body>
+</html>
