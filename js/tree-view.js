@@ -181,6 +181,15 @@ export function createTreeView(stage, { onSelect, coveredBottom = () => 0 }) {
       const k = narrow() ? 0.85 : 1;
       moveTo(24 - root.y * k, stage.clientHeight * 0.45 - root.x * k, k, dur);
     },
+    // Оставляет родоначальника и его детей, остальные ветки сворачивает.
+    collapseAll() {
+      all().forEach(d => {
+        if (d.depth === 0) { open.add(d.data.id); d.children = d._kids; }
+        else { open.delete(d.data.id); d.children = null; }
+      });
+      draw();
+      this.home();
+    },
     expandAll() {
       all().forEach(d => { if (d._kids) { open.add(d.data.id); d.children = d._kids; } });
       draw();

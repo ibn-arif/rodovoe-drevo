@@ -153,6 +153,7 @@ async function main() {
   }
   $('#q').addEventListener('input', e => { state.query = e.target.value; rerender(); });
   $('#expand-all').addEventListener('click', () => view.expandAll());
+  $('#collapse-all').addEventListener('click', () => view.collapseAll());
   $('#invite').addEventListener('click', async () => {
     const tokens = state.role === 'owner'
       ? { owner: state.token, edit: await derive(state.token, 'edit'), view: await derive(state.token, 'view') }

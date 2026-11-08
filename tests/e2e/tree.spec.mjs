@@ -175,3 +175,16 @@ test('spouse role buttons', async ({ browser }) => {
   await page.getByRole('button', { name: 'Применить' }).click();
   await expect(node(page, 'Расул')).toContainText('жена Асият');
 });
+
+test('collapse all', async ({ browser }) => {
+  const s = await seed();
+  const page = await openTree(browser, s.backend, s.v);
+  await page.getByRole('button', { name: 'Раскрыть всё' }).click();
+  await expect(page.locator('.node')).toHaveCount(5);
+  await page.getByRole('button', { name: 'Свернуть всё' }).click();
+  // Остаются родоначальник и его дети; у свёрнутых веток виден счётчик скрытых.
+  await expect(page.locator('.node')).toHaveCount(3);
+  await expect(node(page, 'Али')).toContainText('+1');
+  await page.getByRole('button', { name: 'Раскрыть всё' }).click();
+  await expect(page.locator('.node')).toHaveCount(5);
+});
