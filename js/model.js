@@ -151,3 +151,25 @@ export function describeOps(snapshot, ops) {
   }
   return out;
 }
+
+// Описание записи из истории: имена берутся из того, что сохранено в записи,
+// потому что людей могли с тех пор удалить или переименовать.
+export function describeEdit(edit, nameOf = () => undefined) {
+  const { op, before: b, after: a } = edit;
+  switch (op.type) {
+    case 'add_child': return `Добавлен ребёнок: ${a.name}` + (nameOf(a.parent_id) ? ` (родитель — ${nameOf(a.parent_id)})` : '');
+    case 'add_parent': return `Добавлен предок: ${a.person.name} (ребёнок — ${b.child.name})`;
+    case 'update': {
+      const parts = [];
+      if ('name' in op) parts.push(`Исправлено имя: ${b.name} → ${a.name}`);
+      if ('spouse' in op) parts.push(a.spouse ? `Подпись о супруге у ${a.name}: ${a.spouse}` : `Подпись о супруге у ${a.name} убрана`);
+      return parts.join('; ');
+    }
+    case 'move': return `Перенесён: ${b.name}` + (nameOf(a.parent_id) ? ` (новый родитель — ${nameOf(a.parent_id)})` : '');
+    case 'delete': return a.count > 1 ? `Удалена ветка: ${b.name} — ${a.count} чел.` : `Удалён: ${b.name}`;
+    case 'marry': return `Брак: ${a.a} и ${a.b}`;
+    case 'unmarry': return `Убран брак: ${b.a} и ${b.b}`;
+    case 'revert': return 'Откат правки';
+    default: return 'Изменение';
+  }
+}

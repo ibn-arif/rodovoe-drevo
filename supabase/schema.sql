@@ -502,7 +502,7 @@ begin
         'reverted_by', (select case when bool_and(e.reverted_by is not null) then max(e.reverted_by) end
                           from edits e where e.save_id = s.id),
         'edits', (select jsonb_agg(jsonb_build_object('edit_id', e.id, 'op', e.op, 'before', e.before,
-                    'after', e.after, 'reverted_by', e.reverted_by) order by e.id)
+                    'after', e.after, 'reverted_by', e.reverted_by, 'people', to_jsonb(e.people)) order by e.id)
                     from edits e where e.save_id = s.id)) x
         from saves s
        where s.tree_id = r.tree_id and (p_before is null or s.id < p_before)

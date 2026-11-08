@@ -74,6 +74,19 @@
   </form>
 </dialog>
 
+<dialog id="history" class="dlg dlg-wide" aria-labelledby="history-title">
+  <div class="history-top">
+    <h2 id="history-title">История</h2>
+    <form method="dialog"><button class="btn btn-quiet" type="submit">Закрыть</button></form>
+  </div>
+  <div class="tabs" role="tablist" hidden>
+    <button type="button" role="tab" data-tab="all" aria-selected="true">Все изменения</button>
+    <button type="button" role="tab" data-tab="deleted" aria-selected="false">Удалённое</button>
+  </div>
+  <p class="history-status error" role="alert"></p>
+  <div class="history-body"></div>
+</dialog>
+
 <script type="module" src="js/tree-page.js"></script>
 </body>
 </html>

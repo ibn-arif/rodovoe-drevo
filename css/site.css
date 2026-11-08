@@ -189,3 +189,20 @@ button, input, select, textarea { font: inherit; color: inherit; }
   .draft-row .btn { min-height: 38px; padding: 6px 12px; flex: none; }
   .panel { max-height: 50dvh; }
 }
+
+/* ── История ── */
+.dlg-wide { width: min(720px, calc(100vw - 24px)); max-height: calc(100dvh - 24px); padding: 0; }
+.history-top { position: sticky; top: 0; background: var(--sheet); display: flex; justify-content: space-between; align-items: center; padding: 14px 20px 6px; z-index: 1; }
+.tabs { display: flex; gap: 4px; padding: 0 20px; border-bottom: 1px solid var(--rule); }
+.tabs [role=tab] { appearance: none; border: 0; background: none; padding: 10px 12px; min-height: 44px; cursor: pointer; color: var(--muted); border-bottom: 3px solid transparent; }
+.tabs [role=tab][aria-selected=true] { color: var(--ink); border-bottom-color: var(--madder); font-weight: 700; }
+.history-status { padding: 0 20px; }
+.history-status:empty { display: none; }
+.history-body { padding: 8px 20px 20px; }
+.history-list { display: grid; gap: 18px; }
+.save { border-top: 1px solid var(--rule); padding-top: 10px; display: grid; gap: 6px; justify-items: start; }
+.save-head { display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; }
+.save h3 { font-size: 18px; }
+.save.is-revert h3 { color: var(--muted); }
+.edits { margin: 0; padding-left: 1.2em; display: grid; gap: 4px; }
+.edits li.reverted { color: var(--muted); }

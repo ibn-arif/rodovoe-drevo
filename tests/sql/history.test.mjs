@@ -28,6 +28,7 @@ test('edit cannot revert', async () => {
   assert.equal(h.length, 1);
   assert.equal(h[0].author, 'Расул');
   assert.equal(h[0].edits.length, 4);
+  assert.deepEqual(h[0].edits[0].people, [f.ali]);
   await expectError(revert(db, f.e, h[0].save_id), 'forbidden');
   await expectError(history(db, f.v), 'forbidden');
 });

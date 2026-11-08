@@ -9,6 +9,7 @@ import { createTreeView } from './tree-view.js';
 import { renderPanel } from './panel.js';
 import { initDraftBar } from './draft-bar.js';
 import { renderShare } from './share.js';
+import { initHistory } from './history.js';
 
 const $ = s => document.querySelector(s);
 const api = getApi();
@@ -130,6 +131,11 @@ async function main() {
   const canEdit = state.role === 'edit' || state.role === 'owner';
   $('#tools').hidden = false;
   $('#invite').hidden = !canEdit;
+  $('#history-btn').hidden = !canEdit;
+  if (canEdit) {
+    const history = initHistory(app);
+    $('#history-btn').addEventListener('click', () => history.open());
+  }
   $('#q').addEventListener('input', e => { state.query = e.target.value; rerender(); });
   $('#expand-all').addEventListener('click', () => view.expandAll());
   $('#invite').addEventListener('click', async () => {

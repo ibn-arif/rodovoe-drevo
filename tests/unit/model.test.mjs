@@ -97,3 +97,19 @@ test('countBranch', () => {
   assert.equal(countBranch(snap(), 'ali'), 3);
   assert.equal(countBranch(snap(), 'pat'), 1);
 });
+
+test('describeEdit uses the stored before/after', async () => {
+  const { describeEdit } = await import('../../js/model.js');
+  const nameOf = id => ({ root: 'Магомед', ras: 'Расул' })[id];
+  const e = (op, before, after) => describeEdit({ op, before, after }, nameOf);
+  assert.equal(e({ type: 'add_child' }, null, { id: 'x', parent_id: 'root', name: 'Али' }), 'Добавлен ребёнок: Али (родитель — Магомед)');
+  assert.equal(e({ type: 'add_parent' }, { child: { name: 'Магомед' } }, { person: { name: 'Хасан' } }), 'Добавлен предок: Хасан (ребёнок — Магомед)');
+  assert.equal(e({ type: 'update', name: 'Алий' }, { name: 'Али', spouse: '' }, { name: 'Алий', spouse: '' }), 'Исправлено имя: Али → Алий');
+  assert.equal(e({ type: 'update', spouse: 'жена Асият' }, { name: 'Али', spouse: '' }, { name: 'Али', spouse: 'жена Асият' }), 'Подпись о супруге у Али: жена Асият');
+  assert.equal(e({ type: 'move' }, { name: 'Али' }, { parent_id: 'ras' }), 'Перенесён: Али (новый родитель — Расул)');
+  assert.equal(e({ type: 'delete' }, { name: 'Али' }, { count: 3 }), 'Удалена ветка: Али — 3 чел.');
+  assert.equal(e({ type: 'delete' }, { name: 'Али' }, { count: 1 }), 'Удалён: Али');
+  assert.equal(e({ type: 'marry' }, null, { a: 'Али', b: 'Патимат' }), 'Брак: Али и Патимат');
+  assert.equal(e({ type: 'unmarry' }, { a: 'Али', b: 'Патимат' }, null), 'Убран брак: Али и Патимат');
+  assert.equal(e({ type: 'add_child' }, null, { id: 'x', parent_id: 'gone', name: 'Али' }), 'Добавлен ребёнок: Али');
+});
