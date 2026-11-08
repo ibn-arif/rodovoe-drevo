@@ -44,6 +44,7 @@ create table if not exists public.saves (
   id            bigserial primary key,
   tree_id       uuid not null references public.trees(id) on delete cascade,
   author        text not null,
+  version       bigint not null,
   created_at    timestamptz not null default now(),
   reverts_save  bigint,
   reverts_edit  bigint
@@ -177,6 +178,211 @@ begin
   return (select version from trees where id = r.tree_id);
 end $$;
 
+-- ── Сохранение черновика ─────────────────────────────────────────────
+
+create or replace function drevo_private.uuid_of(p jsonb, k text) returns uuid
+language plpgsql immutable as $$
+begin
+  if p ->> k is null then raise exception 'bad_op'; end if;
+  return (p ->> k)::uuid;
+exception when invalid_text_representation then
+  raise exception 'bad_op';
+end $$;
+
+-- Живой человек этого древа или bad_op.
+create or replace function drevo_private.alive(p_tree uuid, p_id uuid) returns people
+language plpgsql stable as $$
+declare r people;
+begin
+  select * into r from people where id = p_id and tree_id = p_tree and deleted_by is null;
+  if r.id is null then raise exception 'bad_op'; end if;
+  return r;
+end $$;
+
+create or replace function drevo_private.person_json(p people) returns jsonb
+language sql immutable as $$
+  select jsonb_build_object('id', p.id, 'parent_id', p.parent_id, 'pos', p.pos, 'name', p.name, 'spouse', p.spouse)
+$$;
+
+-- Люди, которых правка меняет напрямую (для поиска конфликтов) и на которых она опирается.
+create or replace function drevo_private.op_targets(p_op jsonb, out changed uuid[], out needed uuid[])
+language plpgsql immutable as $$
+begin
+  changed := '{}'; needed := '{}';
+  case p_op ->> 'type'
+    when 'add_child' then needed := array[drevo_private.uuid_of(p_op, 'parent_id')];
+    when 'add_parent' then changed := array[drevo_private.uuid_of(p_op, 'child_id')];
+    when 'update' then changed := array[drevo_private.uuid_of(p_op, 'person_id')];
+    when 'move' then changed := array[drevo_private.uuid_of(p_op, 'person_id')];
+                     needed := array[drevo_private.uuid_of(p_op, 'parent_id')];
+    when 'delete' then changed := array[drevo_private.uuid_of(p_op, 'person_id')];
+    when 'marry' then changed := array[drevo_private.uuid_of(p_op, 'a_id'), drevo_private.uuid_of(p_op, 'b_id')];
+    else null;
+  end case;
+end $$;
+
+create or replace function drevo_private.next_pos(p_parent uuid) returns int
+language sql stable as $$ select coalesce(max(pos) + 1, 0) from people where parent_id = p_parent $$;
+
+-- Применяет одну правку, пишет её в журнал. Возвращает id записи журнала.
+create or replace function drevo_private.apply_op(p_tree uuid, p_save bigint, p_author text, p_op jsonb) returns bigint
+language plpgsql as $$
+declare
+  v_edit bigint;
+  v_type text := p_op ->> 'type';
+  v_id uuid; v_p people; v_q people; v_m marriages;
+  v_root uuid; v_ids uuid[]; v_before jsonb; v_after jsonb;
+  v_name text; v_spouse text;
+begin
+  insert into edits(save_id, op) values (p_save, p_op) returning id into v_edit;
+  select root_id into v_root from trees where id = p_tree;
+
+  if v_type = 'add_child' then
+    v_id := drevo_private.uuid_of(p_op, 'id');
+    if exists (select 1 from people where id = v_id) then raise exception 'bad_op'; end if;
+    v_p := drevo_private.alive(p_tree, drevo_private.uuid_of(p_op, 'parent_id'));
+    insert into people(id, tree_id, parent_id, pos, name, spouse, updated_by)
+      values (v_id, p_tree, v_p.id, drevo_private.next_pos(v_p.id),
+              drevo_private.clean_name(p_op ->> 'name'), drevo_private.clean_spouse(p_op ->> 'spouse'), p_author)
+      returning * into v_q;
+    v_after := drevo_private.person_json(v_q); v_ids := array[v_id];
+
+  elsif v_type = 'add_parent' then
+    v_id := drevo_private.uuid_of(p_op, 'id');
+    if exists (select 1 from people where id = v_id) then raise exception 'bad_op'; end if;
+    v_p := drevo_private.alive(p_tree, drevo_private.uuid_of(p_op, 'child_id'));
+    if v_p.id <> v_root then raise exception 'not_root'; end if;
+    insert into people(id, tree_id, parent_id, pos, name, spouse, updated_by)
+      values (v_id, p_tree, null, 0, drevo_private.clean_name(p_op ->> 'name'),
+              drevo_private.clean_spouse(p_op ->> 'spouse'), p_author)
+      returning * into v_q;
+    update people set parent_id = v_id, pos = 0, updated_by = p_author, updated_at = now() where id = v_p.id;
+    update trees set root_id = v_id where id = p_tree;
+    v_before := jsonb_build_object('root_id', v_root, 'child', drevo_private.person_json(v_p));
+    v_after := jsonb_build_object('root_id', v_id, 'person', drevo_private.person_json(v_q));
+    v_ids := array[v_id, v_p.id];
+
+  elsif v_type = 'update' then
+    v_p := drevo_private.alive(p_tree, drevo_private.uuid_of(p_op, 'person_id'));
+    if not (p_op ? 'name' or p_op ? 'spouse') then raise exception 'bad_op'; end if;
+    v_name := case when p_op ? 'name' then drevo_private.clean_name(p_op ->> 'name') else v_p.name end;
+    v_spouse := case when p_op ? 'spouse' then drevo_private.clean_spouse(p_op ->> 'spouse') else v_p.spouse end;
+    update people set name = v_name, spouse = v_spouse, updated_by = p_author, updated_at = now()
+     where id = v_p.id returning * into v_q;
+    v_before := drevo_private.person_json(v_p); v_after := drevo_private.person_json(v_q); v_ids := array[v_p.id];
+
+  elsif v_type = 'move' then
+    v_p := drevo_private.alive(p_tree, drevo_private.uuid_of(p_op, 'person_id'));
+    if v_p.id = v_root then raise exception 'root_protected'; end if;
+    v_q := drevo_private.alive(p_tree, drevo_private.uuid_of(p_op, 'parent_id'));
+    if exists (
+      with recursive sub(id) as (select v_p.id union all select c.id from people c join sub on c.parent_id = sub.id)
+      select 1 from sub where id = v_q.id) then raise exception 'cycle'; end if;
+    update people set parent_id = v_q.id, pos = drevo_private.next_pos(v_q.id), updated_by = p_author, updated_at = now()
+     where id = v_p.id returning * into v_q;
+    v_before := drevo_private.person_json(v_p); v_after := drevo_private.person_json(v_q); v_ids := array[v_p.id];
+
+  elsif v_type = 'delete' then
+    v_p := drevo_private.alive(p_tree, drevo_private.uuid_of(p_op, 'person_id'));
+    if v_p.id = v_root then raise exception 'root_protected'; end if;
+    with recursive sub(id) as (
+      select v_p.id
+      union all
+      select c.id from people c join sub on c.parent_id = sub.id where c.deleted_by is null)
+    select array_agg(id) into v_ids from sub;
+    update people set deleted_by = v_edit, updated_by = p_author, updated_at = now() where id = any(v_ids);
+    v_before := jsonb_build_object('name', v_p.name);
+    v_after := jsonb_build_object('count', cardinality(v_ids));
+
+  elsif v_type = 'marry' then
+    v_id := drevo_private.uuid_of(p_op, 'id');
+    if exists (select 1 from marriages where id = v_id) then raise exception 'bad_op'; end if;
+    v_p := drevo_private.alive(p_tree, drevo_private.uuid_of(p_op, 'a_id'));
+    v_q := drevo_private.alive(p_tree, drevo_private.uuid_of(p_op, 'b_id'));
+    if v_p.id = v_q.id or exists (select 1 from marriages where tree_id = p_tree and deleted_by is null
+         and ((a_id = v_p.id and b_id = v_q.id) or (a_id = v_q.id and b_id = v_p.id))) then
+      raise exception 'bad_op';
+    end if;
+    insert into marriages(id, tree_id, a_id, b_id) values (v_id, p_tree, v_p.id, v_q.id);
+    v_after := jsonb_build_object('id', v_id, 'a_id', v_p.id, 'b_id', v_q.id, 'a', v_p.name, 'b', v_q.name);
+    v_ids := array[v_p.id, v_q.id];
+
+  elsif v_type = 'unmarry' then
+    select * into v_m from marriages where id = drevo_private.uuid_of(p_op, 'marriage_id')
+       and tree_id = p_tree and deleted_by is null;
+    if v_m.id is null then raise exception 'bad_op'; end if;
+    update marriages set deleted_by = v_edit where id = v_m.id;
+    v_before := jsonb_build_object('id', v_m.id, 'a_id', v_m.a_id, 'b_id', v_m.b_id,
+      'a', (select name from people where id = v_m.a_id), 'b', (select name from people where id = v_m.b_id));
+    v_ids := array[v_m.a_id, v_m.b_id];
+
+  else
+    raise exception 'bad_op';
+  end if;
+
+  update edits set before = v_before, after = v_after, people = coalesce(v_ids, '{}') where id = v_edit;
+  return v_edit;
+end $$;
+
+create or replace function public.save_changes(p_token text, p_author text, p_base_version bigint,
+  p_ops jsonb, p_force boolean default false) returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare
+  r record; v_author text; v_save bigint; v_version bigint; v_op jsonb;
+  v_new uuid[] := '{}'; v_changed uuid[] := '{}'; v_needed uuid[] := '{}'; t record;
+  v_conflicts jsonb;
+begin
+  select * into r from drevo_private.role(p_token);
+  if r.role not in ('owner', 'edit') then raise exception 'forbidden'; end if;
+  v_author := drevo_private.clean_name(p_author);
+  if jsonb_typeof(p_ops) <> 'array' or jsonb_array_length(p_ops) = 0 or jsonb_array_length(p_ops) > 5000 then
+    raise exception 'bad_op';
+  end if;
+  perform 1 from trees where id = r.tree_id for update;
+
+  -- Кого черновик трогает (кроме людей, которых он сам создаёт).
+  for v_op in select * from jsonb_array_elements(p_ops) loop
+    if v_op ->> 'type' in ('add_child', 'add_parent', 'marry') then
+      v_new := v_new || drevo_private.uuid_of(v_op, 'id');
+    end if;
+    select * into t from drevo_private.op_targets(v_op);
+    v_changed := v_changed || t.changed;
+    v_needed := v_needed || t.needed;
+  end loop;
+
+  if not p_force then
+    with ids as (
+      select distinct id from unnest(v_changed || v_needed) id where id <> all(v_new)
+    ), deleted as (
+      select p.id, p.name, s.author as by, s.created_at as at, 'deleted' as reason
+        from ids join people p on p.id = ids.id and p.tree_id = r.tree_id and p.deleted_by is not null
+        join edits e on e.id = p.deleted_by join saves s on s.id = e.save_id
+       where s.version > p_base_version
+    ), changed as (
+      select distinct on (p.id) p.id, p.name, s.author as by, s.created_at as at, 'changed' as reason
+        from unnest(v_changed) cid
+        join people p on p.id = cid and p.tree_id = r.tree_id and p.deleted_by is null
+        join edits e on p.id = any(e.people)
+        join saves s on s.id = e.save_id and s.tree_id = r.tree_id and s.version > p_base_version
+       where cid <> all(v_new)
+       order by p.id, s.id desc
+    )
+    select jsonb_agg(jsonb_build_object('person_id', id, 'name', name, 'by', by, 'at', at, 'reason', reason))
+      into v_conflicts
+      from (select * from deleted union all select * from changed) c;
+    if v_conflicts is not null then
+      return jsonb_build_object('ok', false, 'conflicts', v_conflicts);
+    end if;
+  end if;
+
+  update trees set version = version + 1 where id = r.tree_id returning version into v_version;
+  insert into saves(tree_id, author, version) values (r.tree_id, v_author, v_version) returning id into v_save;
+  for v_op in select * from jsonb_array_elements(p_ops) loop
+    perform drevo_private.apply_op(r.tree_id, v_save, v_author, v_op);
+  end loop;
+  return jsonb_build_object('ok', true, 'save_id', v_save, 'version', v_version);
+end $$;
+
 -- По умолчанию Postgres даёт EXECUTE всем; открываем только нужное.
 revoke execute on all functions in schema public from public, anon, authenticated;
 revoke execute on all functions in schema drevo_private from public, anon, authenticated;
@@ -184,3 +390,4 @@ grant execute on function public.ping() to anon, authenticated;
 grant execute on function public.create_tree(text, text, text, text, text) to anon, authenticated;
 grant execute on function public.open_tree(text) to anon, authenticated;
 grant execute on function public.tree_version(text) to anon, authenticated;
+grant execute on function public.save_changes(text, text, bigint, jsonb, boolean) to anon, authenticated;
