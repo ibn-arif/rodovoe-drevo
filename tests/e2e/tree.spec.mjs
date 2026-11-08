@@ -75,6 +75,7 @@ test('draft and save', async ({ browser }) => {
   await page.getByLabel('Как вас подписать?').fill('Зайнаб');
   await page.getByRole('button', { name: 'Сохранить изменения' }).click();
   await expect(page.locator('#draft-bar')).toBeHidden();
+  await expect(page.locator('#toast')).toHaveText('Сохранено: 4 изменения. Теперь их видят все.');
   await expect(node(other, 'Иса')).toBeVisible({ timeout: 5000 });
   await expect(node(other, 'Расул')).toHaveCount(0);
 });

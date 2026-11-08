@@ -13,7 +13,7 @@
   <section id="start" class="home-grid">
     <div>
       <h1>Родовое древо</h1>
-      <p class="lede">Соберите древо своей семьи вместе с роднёй. Каждый дописывает то, что помнит, — по одной ссылке, без регистрации.</p>
+      <p class="lede">Соберите древо своей семьи вместе с роднёй. Каждый дописывает то, что помнит. Нужна только ссылка, без регистрации.</p>
       <form id="create" class="create" novalidate>
         <div class="field">
           <label for="root-name">Имя родоначальника</label>
@@ -29,21 +29,21 @@
       <p class="example"><a href="tree.html#t=romanovy">Посмотреть пример: Романовы, 1613–1917</a></p>
     </div>
     <svg class="sprig" viewBox="0 0 520 300" role="img" aria-label="Набросок древа с вашим родоначальником">
-      <path class="ln" d="M24 150 C110 150 110 70 196 70"/>
-      <path class="ln" d="M24 150 H196"/>
-      <path class="ln" d="M24 150 C110 150 110 230 196 230"/>
-      <path class="ln" d="M250 70 C320 70 320 40 390 40"/>
-      <path class="ln" d="M250 70 C320 70 320 100 390 100"/>
-      <path class="ln" d="M250 230 C320 230 320 200 390 200"/>
-      <path class="ln" d="M250 230 C320 230 320 260 390 260"/>
-      <circle class="dot" cx="24" cy="150" r="6"/>
-      <circle class="dot" cx="196" cy="70" r="4.5"/><circle class="dot" cx="196" cy="150" r="4.5"/><circle class="dot" cx="196" cy="230" r="4.5"/>
-      <circle class="dot" cx="390" cy="40" r="3.5"/><circle class="dot" cx="390" cy="100" r="3.5"/>
-      <circle class="dot" cx="390" cy="200" r="3.5"/><circle class="dot" cx="390" cy="260" r="3.5"/>
-      <text id="sprig-root" class="root-name" x="14" y="130">Родоначальник</text>
-      <text class="kin" x="206" y="75">сын</text><text class="kin" x="206" y="155">дочь</text><text class="kin" x="206" y="235">сын</text>
-      <text class="kin" x="400" y="45">внук</text><text class="kin" x="400" y="105">внучка</text>
-      <text class="kin" x="400" y="205">внук</text><text class="kin" x="400" y="265">…</text>
+      <path class="ln g1" pathLength="1" d="M24 150 C110 150 110 70 196 70"/>
+      <path class="ln g1" pathLength="1" d="M24 150 H196"/>
+      <path class="ln g1" pathLength="1" d="M24 150 C110 150 110 230 196 230"/>
+      <path class="ln g2" pathLength="1" d="M250 70 C320 70 320 40 390 40"/>
+      <path class="ln g2" pathLength="1" d="M250 70 C320 70 320 100 390 100"/>
+      <path class="ln g2" pathLength="1" d="M250 230 C320 230 320 200 390 200"/>
+      <path class="ln g2" pathLength="1" d="M250 230 C320 230 320 260 390 260"/>
+      <circle class="dot g0" cx="24" cy="150" r="6"/>
+      <circle class="dot g1" cx="196" cy="70" r="4.5"/><circle class="dot g1" cx="196" cy="150" r="4.5"/><circle class="dot g1" cx="196" cy="230" r="4.5"/>
+      <circle class="dot g2" cx="390" cy="40" r="3.5"/><circle class="dot g2" cx="390" cy="100" r="3.5"/>
+      <circle class="dot g2" cx="390" cy="200" r="3.5"/><circle class="dot g2" cx="390" cy="260" r="3.5"/>
+      <text id="sprig-root" class="root-name g0" x="14" y="130">Родоначальник</text>
+      <text class="kin g1" x="206" y="75">сын</text><text class="kin g1" x="206" y="155">дочь</text><text class="kin g1" x="206" y="235">сын</text>
+      <text class="kin g2" x="400" y="45">внук</text><text class="kin g2" x="400" y="105">внучка</text>
+      <text class="kin g2" x="400" y="205">внук</text><text class="kin g2" x="400" y="265">…</text>
     </svg>
   </section>
 
@@ -55,15 +55,15 @@
   </section>
 
   <ol class="steps" id="steps">
-    <li><h2>Создайте древо</h2><p>Впишите родоначальника — с него начнётся древо.</p></li>
+    <li><h2>Создайте древо</h2><p>Впишите родоначальника: с него начнётся древо.</p></li>
     <li><h2>Позовите родных</h2><p>Отправьте ссылку в WhatsApp. Каждый добавит тех, кого знает, и нажмёт «Сохранить».</p></li>
-    <li><h2>Распечатайте</h2><p>Скачайте плакат в PDF — четыре дизайна, от A4 до A0.</p></li>
+    <li><h2>Распечатайте</h2><p>Скачайте плакат в PDF: четыре дизайна, от A4 до A0.</p></li>
   </ol>
 
   <section class="faq" aria-labelledby="faq-title">
     <h2 id="faq-title">Частые вопросы</h2>
     <details><summary>Зачем три ссылки?</summary>
-      <p>Ссылка создателя — только ваша: с ней можно откатить любую правку и вернуть удалённое. Ссылку для родных отправьте тем, кто будет дописывать древо: они могут добавлять, исправлять и удалять людей, но не откатывать. Ссылка для просмотра — чтобы показать древо, ничего не давая менять.</p></details>
+      <p>Ссылка создателя только ваша: с ней можно откатить любую правку и вернуть удалённое. Ссылку для родных отправьте тем, кто будет дописывать древо: они могут добавлять, исправлять и удалять людей, но не откатывать. Ссылка для просмотра нужна, чтобы показать древо, ничего не давая менять.</p></details>
     <details><summary>Кто увидит наше древо?</summary>
       <p>Только те, у кого есть ссылка. Древа нет ни в поиске, ни на этом сайте. Поэтому отправляйте ссылку для родных только своим.</p></details>
     <details><summary>Нужно ли регистрироваться?</summary>

@@ -39,7 +39,7 @@
   --branch: #9AAD9E;
   --ok: #2F6B4F;
   --danger: #9B2226;
-  --draft: #C26A1B;
+  --draft: #A0560F;
   --serif: "PT Serif", Georgia, "Times New Roman", serif;
   --sans: "PT Sans", "Segoe UI", Roboto, Arial, sans-serif;
   --shadow: 0 -6px 24px rgba(20, 30, 28, .16);
@@ -115,7 +115,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .share-link p { margin: 0; color: var(--muted); font-size: 15px; }
 .share-row { display: flex; flex-wrap: wrap; gap: 8px; }
 .share-row .input { flex: 1 1 100%; font-size: 14px; }
-.warn { border-left: 3px solid var(--madder); background: var(--madder-soft); padding: 10px 14px; border-radius: 0 10px 10px 0; margin: 0; }
+.warn { background: var(--madder-soft); border: 1px solid color-mix(in srgb, var(--madder) 35%, transparent); padding: 10px 14px; border-radius: 12px; margin: 0; }
 
 /* ── Страница древа ── */
 .tree-body { height: 100dvh; display: flex; flex-direction: column; overflow: hidden; }
@@ -167,7 +167,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .panel h2 { font-size: 24px; }
 .panel .where, .panel .who { margin: 2px 0 0; color: var(--muted); font-size: 15px; }
 .actions { display: flex; flex-wrap: wrap; gap: 8px; }
-.subform { display: grid; gap: 8px; border-left: 3px solid var(--rule); padding-left: 12px; }
+.subform { display: grid; gap: 8px; background: var(--paper); border: 1px solid var(--rule); border-radius: 12px; padding: 12px; }
 .pick { display: grid; gap: 4px; max-height: 200px; overflow: auto; }
 .pick button { text-align: left; border: 1px solid var(--rule); background: var(--paper); border-radius: 8px; padding: 8px 10px; cursor: pointer; }
 .chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; list-style: none; }
@@ -185,7 +185,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .dlg h2 { font-size: 22px; }
 .dlg p { margin: 0; }
 .dlg-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
-.conflicts { border-left: 3px solid var(--danger); padding-left: 12px; display: grid; gap: 8px; }
+.conflicts { background: color-mix(in srgb, var(--danger) 8%, var(--sheet)); border: 1px solid color-mix(in srgb, var(--danger) 35%, transparent); border-radius: 12px; padding: 12px; display: grid; gap: 8px; }
 .conflicts ul { margin: 0; padding-left: 1.2em; }
 
 @media (max-width: 899px) {
@@ -260,3 +260,49 @@ h1, h2, h3 { font-family: var(--sans); letter-spacing: -.02em; }
 .faq details { border-top: 1px solid var(--rule); padding: 10px 0; }
 .faq summary { cursor: pointer; font-weight: 700; min-height: 32px; }
 .faq p { margin: 8px 0 0; color: var(--muted); }
+
+/* ── Поверхности браузера в цветах сайта ── */
+::selection { background: var(--madder-soft); color: var(--ink); }
+:root { accent-color: var(--madder); caret-color: var(--madder); scrollbar-color: var(--rule) transparent; }
+a { text-underline-offset: .18em; }
+
+/* ── Движение ── */
+:root { --ease-out: cubic-bezier(0.16, 1, 0.3, 1); }
+@media (prefers-reduced-motion: no-preference) {
+  /* Главная: веточка вырастает от родоначальника — поколение за поколением. */
+  .sprig .ln { stroke-dasharray: 1; animation: grow .7s var(--ease-out) backwards; }
+  .sprig .g0, .sprig .g1, .sprig .g2 { animation: appear .45s var(--ease-out) backwards; }
+  .sprig .g1:not(.ln) { animation-delay: .4s; }
+  .sprig .g2:not(.ln) { animation-delay: .85s; }
+  .sprig .ln.g1 { animation: grow .7s var(--ease-out) .1s backwards; }
+  .sprig .ln.g2 { animation: grow .7s var(--ease-out) .5s backwards; }
+  #sprig-root { transition: opacity .2s; }
+
+  /* Панель человека выезжает, окна и полоска черновика появляются мягко. */
+  .panel:not([hidden]) { animation: sheet-in .28s var(--ease-out); }
+  .dlg[open] { animation: dlg-in .22s var(--ease-out); }
+  .dlg[open]::backdrop { animation: fade-in .22s ease-out; }
+  .draft-bar:not([hidden]) { animation: drop-in .25s var(--ease-out); }
+  .faq details[open] p { animation: fade-in .25s ease-out; }
+  .btn { transition: background-color .15s, border-color .15s, filter .15s, transform .1s; }
+  .btn:active { transform: translateY(1px); }
+  .node circle.dot { transition: fill .2s, stroke-width .15s; }
+}
+@media (prefers-reduced-motion: no-preference) and (min-width: 900px) {
+  .panel:not([hidden]) { animation: fade-in .2s ease-out; }
+}
+@keyframes grow { from { stroke-dashoffset: 1; } to { stroke-dashoffset: 0; } }
+@keyframes appear { from { opacity: 0; } }
+@keyframes fade-in { from { opacity: 0; } }
+@keyframes sheet-in { from { transform: translateY(24px); opacity: 0; } }
+@keyframes dlg-in { from { transform: scale(.97) translateY(6px); opacity: 0; } }
+@keyframes drop-in { from { transform: translateY(-6px); opacity: 0; } }
+
+/* Подтверждение «Сохранено» */
+.toast { position: fixed; left: 50%; bottom: max(20px, env(safe-area-inset-bottom)); transform: translateX(-50%); z-index: 50;
+  background: var(--ink); color: var(--paper); border-radius: 999px; padding: 10px 18px; font-weight: 700; margin: 0;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, .18); }
+@media (prefers-reduced-motion: no-preference) {
+  .toast:not([hidden]) { animation: toast 2.4s var(--ease-out) both; }
+}
+@keyframes toast { 0% { opacity: 0; transform: translate(-50%, 10px); } 12%, 80% { opacity: 1; transform: translate(-50%, 0); } 100% { opacity: 0; } }

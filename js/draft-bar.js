@@ -10,6 +10,17 @@ const AUTHOR = 'drevo:author';
 
 
 // app: { state, api, refresh(): Promise, rerender() }
+let toastTimer;
+function toast(text) {
+  const t = $('#toast');
+  t.textContent = text;
+  t.hidden = true;
+  void t.offsetWidth;           // перезапуск появления, если уже показан
+  t.hidden = false;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { t.hidden = true; }, 2600);
+}
+
 export function initDraftBar(app) {
   const store = safeLocalStorage();
   const bar = $('#draft-bar'), list = $('#draft-list'), details = $('#draft-details');
@@ -62,9 +73,11 @@ export function initDraftBar(app) {
     try {
       const r = await app.api.saveChanges(token, name.value, draft.baseVersion, draft.ops, force);
       if (!r.ok) { showConflicts(r.conflicts); return; }
+      const n = draft.ops.length;
       draft.clear();
       dlg.close();
       await app.refresh();
+      toast(`Сохранено: ${n} ${plural(n, 'изменение', 'изменения', 'изменений')}. Теперь их видят все.`);
     } catch (e) {
       err.textContent = errorText(e);
       err.hidden = false;

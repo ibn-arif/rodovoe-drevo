@@ -27,6 +27,8 @@ export function createTreeView(stage, { onSelect, coveredBottom = () => 0 }) {
   const reduce = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
 
   const open = new Set();
+  let prev = new Map();   // где узлы стояли до перерисовки: новые ветки вырастают из родителя
+  const DUR = 280;
   let known = new Set();
   let root = null, data = null, opts = { query: '', selectedId: null, marriages: [] };
 
@@ -67,19 +69,36 @@ export function createTreeView(stage, { onSelect, coveredBottom = () => 0 }) {
     for (let i = 1; i < wmax.length; i++) colX[i] = colX[i - 1] + Math.max(COL(), (wmax[i - 1] || 0) + (narrow() ? 70 : 100));
     nodes.forEach(d => { d.y = colX[d.depth]; });
 
-    gLinks.selectAll('path').data(links, l => l.target.data.id).join('path').attr('class', 'link-l')
-      .attr('d', l => {
+    const dur = reduce() || !prev.size ? 0 : DUR;
+    const ease = d3.easeCubicOut;
+    const vis = new Map(nodes.map(d => [d.data.id, d]));
+    // Ближайший видимый предок (куда сворачивается исчезающая ветка) и его прежнее место (откуда растёт новая).
+    const anchorNew = d => { for (let a = d.parent; a; a = a.parent) { const v = vis.get(a.data.id); if (v) return v; } return root; };
+    const anchorOld = d => { for (let a = d.parent; a; a = a.parent) { const p = prev.get(a.data.id); if (p) return p; } return { x: root.x, y: root.y }; };
+    const point = (x, y) => `M${y},${x} C${y},${x} ${y},${x} ${y},${x}`;
+    // Без анимации всё ставится сразу, а не кадром позже.
+    const tr = sel => dur ? sel.transition().duration(dur).ease(ease) : sel;
+
+    gLinks.selectAll('path').data(links, l => l.target.data.id).join(
+      enter => enter.append('path').attr('class', 'link-l').attr('d', l => { const o = prev.get(l.source.data.id) ?? l.source; return point(o.x, o.y); }),
+      update => update,
+      exit => dur ? exit.transition().duration(dur).ease(ease).attr('d', l => { const a = anchorNew(l.target); return point(a.x, a.y); }).remove() : exit.remove(),
+    ).call(sel => tr(sel).attr('d', l => {
         const p = l.source, c = l.target;
         const sx = p.y + labelWidth(p) + 6;
         const ex = colX[p.depth] + (wmax[p.depth] || 0) + 12;
         const tx = c.y - 9, mx = ex + (tx - ex) * 0.5;
         return `M${sx},${p.x} C${mx},${p.x} ${mx},${c.x} ${tx},${c.x}`;
-      });
+      }));
 
     const q = norm(opts.query.trim());
     const nd = gNodes.selectAll('g.node').data(nodes, d => d.data.id);
-    nd.exit().remove();
+    if (dur) nd.exit().transition().duration(dur).ease(ease)
+      .attr('transform', d => { const a = anchorNew(d); return `translate(${a.y},${a.x})`; }).style('opacity', 0).remove();
+    else nd.exit().remove();
     const ne = nd.enter().append('g').attr('tabindex', 0).attr('role', 'treeitem')
+      .attr('transform', d => { const o = prev.get(d.data.id) ?? anchorOld(d); return `translate(${o.y},${o.x})`; })
+      .style('opacity', dur ? 0 : 1)
       .on('click', (e, d) => { e.stopPropagation(); select(d); })
       .on('keydown', (e, d) => {
         if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); select(d); }
@@ -90,7 +109,9 @@ export function createTreeView(stage, { onSelect, coveredBottom = () => 0 }) {
     ne.append('circle').attr('class', 'dot').attr('r', 7).on('click', (e, d) => { e.stopPropagation(); toggle(d); });
     ne.append('text').attr('class', 'nm').attr('x', 13).attr('dy', '0.34em');
 
-    ne.merge(nd).attr('transform', d => `translate(${d.y},${d.x})`)
+    const all = ne.merge(nd);
+    tr(all).attr('transform', d => `translate(${d.y},${d.x})`).style('opacity', 1);
+    all
       .attr('class', d => 'node' + (!d._kids ? ' leaf' : d.children ? '' : ' closed') + (d.depth < TOP_DEPTH ? ' top' : '')
         + (q && norm(d.data.name).includes(q) ? ' hl' : '') + (d.data.id === opts.selectedId ? ' sel' : '')
         + (d.data.draft ? ' draft' : ''))
@@ -112,13 +133,17 @@ export function createTreeView(stage, { onSelect, coveredBottom = () => 0 }) {
         d3.select(this).select('rect.hit').attr('x', -16).attr('y', -h / 2).attr('width', bb.width + 32).attr('height', h);
       });
 
-    const vis = new Map(nodes.map(d => [d.data.id, d]));
     const pairs = opts.marriages.filter(m => vis.has(m.a_id) && vis.has(m.b_id)).map(m => [vis.get(m.a_id), vis.get(m.b_id)]);
     gMar.selectAll('path').data(pairs).join('path').attr('class', 'marlink').attr('d', ([a, b]) => {
       const bend = 50 + Math.min(240, Math.abs(a.x - b.x) * 0.15), xl = Math.min(a.y, b.y) - bend;
       return `M${a.y},${a.x} C${xl},${a.x} ${xl},${b.x} ${b.y},${b.x}`;
     });
+    // Связи браков появляются, когда узлы уже на местах.
+    if (dur) gMar.interrupt().style('opacity', 0).transition().delay(dur).duration(150).style('opacity', 1);
+    prev = new Map(nodes.map(d => [d.data.id, { x: d.x, y: d.y }]));
+    extent = { x0: d3.min(nodes, d => d.x), x1: d3.max(nodes, d => d.x), y1: d3.max(nodes, d => d.y + labelWidth(d)) };
   }
+  let extent = { x0: 0, x1: 0, y1: 0 };
 
   function toggle(d) {
     if (!d._kids) return;
@@ -160,7 +185,9 @@ export function createTreeView(stage, { onSelect, coveredBottom = () => 0 }) {
       all().forEach(d => { if (d._kids) { open.add(d.data.id); d.children = d._kids; } });
       draw();
       // Всё древо на экран.
-      const b = g.node().getBBox(), W = stage.clientWidth, H = stage.clientHeight;
+      // Размер берём из раскладки, а не из DOM: узлы ещё едут к своим местам.
+      const b = { x: -16, y: extent.x0 - 20, width: extent.y1 + 32, height: extent.x1 - extent.x0 + 40 };
+      const W = stage.clientWidth, H = stage.clientHeight;
       const k = Math.min(1, Math.max(0.2, Math.min(W / (b.width + 40), H / (b.height + 40))));
       moveTo(20 - b.x * k, Math.max(10, (H - b.height * k) / 2) - b.y * k, k);
     },
