@@ -603,6 +603,16 @@ begin
      where s.tree_id = r.tree_id and e.op ->> 'type' = 'delete' and e.reverted_by is null), '[]'::jsonb);
 end $$;
 
+-- Всем функциям — фиксированный search_path (pg_temp последним), чтобы их нельзя было обмануть подменой объектов.
+do $$
+declare f record;
+begin
+  for f in select p.oid::regprocedure as sig from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+            where n.nspname in ('public', 'drevo_private') and p.prokind = 'f' loop
+    execute format('alter function %s set search_path = public, pg_temp', f.sig);
+  end loop;
+end $$;
+
 -- По умолчанию Postgres даёт EXECUTE всем; открываем только нужное.
 revoke execute on all functions in schema public from public, anon, authenticated;
 revoke execute on all functions in schema drevo_private from public, anon, authenticated;
