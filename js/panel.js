@@ -1,5 +1,5 @@
 // Панель человека: просмотр, а для родни и создателя — правки в черновик.
-import { norm } from './names.js';
+import { norm, parseSpouse, composeSpouse, guessRole } from './names.js';
 import { countBranch } from './model.js';
 import { ago } from './util.js';
 
@@ -65,15 +65,36 @@ export function renderPanel(el, ctx) {
     return;
   }
 
-  const nameIn = input(p.name), spouseIn = input(p.spouse, { placeholder: 'например, жена Асият' });
+  // Супруг не из рода: кнопки «жена / муж» и имя. Роль угадывается по имени человека, пока её не выбрали.
+  const parsed = parseSpouse(p.spouse);
+  let role = parsed.role ?? guessRole(p.name);
+  let guessed = !parsed.role;
+  const nameIn = input(p.name);
+  const spouseIn = input(parsed.name, { placeholder: 'только имя', 'aria-label': 'Имя супруга или супруги' });
+  const help = h('span', { class: 'help muted small' });
+  const roleBtns = ['жена', 'муж'].map(r => h('button', { type: 'button', 'data-r': r, on: { click: () => { guessed = false; setRole(r); } } }, r));
+  function setRole(r) {
+    role = r;
+    roleBtns.forEach(b => b.setAttribute('aria-pressed', String(b.dataset.r === r)));
+    help.textContent = guessed ? `Выбрано по имени: «${r}». Если неверно, переключите.` : '';
+  }
+  setRole(role);
+  nameIn.addEventListener('input', () => { if (guessed) setRole(guessRole(nameIn.value)); });
+  const spouseId = 'f' + (++seq);
+  spouseIn.id = spouseId;
   const editForm = h('form', { class: 'panel-in', on: { submit: e => {
     e.preventDefault();
     const op = { type: 'update', person_id: p.id };
     if (nameIn.value.trim() !== p.name) op.name = nameIn.value;
-    if (spouseIn.value.trim() !== p.spouse) op.spouse = spouseIn.value;
+    const sp = composeSpouse(role, spouseIn.value);
+    if (sp !== p.spouse) op.spouse = sp;
     if ('name' in op || 'spouse' in op) apply(op);
   } } },
-    field('Имя', nameIn), field('Подпись о супруге', spouseIn),
+    field('Имя', nameIn),
+    h('div', { class: 'field' },
+      h('label', { for: spouseId }, 'Супруг или супруга не из этого рода'),
+      h('div', { class: 'spwrap' }, h('div', { class: 'seg', role: 'group', 'aria-label': 'Кто' }, roleBtns), spouseIn),
+      help),
     h('div', {}, h('button', { class: 'btn', type: 'submit' }, 'Применить')));
 
   // Маленькая форма «одно поле + кнопка».

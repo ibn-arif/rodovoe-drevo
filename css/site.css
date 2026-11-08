@@ -229,3 +229,11 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .choice input { width: 18px; height: 18px; accent-color: var(--madder); }
 .poster-preview { border: 1px solid var(--rule); border-radius: 8px; overflow: hidden; background: #fff; aspect-ratio: 841 / 1189; max-height: 70dvh; }
 .poster-preview svg { width: 100%; height: 100%; display: block; }
+
+/* Кнопки «жена / муж» рядом с именем супруга */
+.spwrap { display: flex; gap: 8px; align-items: stretch; }
+.spwrap .input { flex: 1; min-width: 0; }
+.seg { display: inline-flex; border: 1px solid var(--rule); border-radius: 10px; overflow: hidden; flex: none; }
+.seg button { appearance: none; border: 0; background: var(--sheet); color: var(--ink); padding: 0 14px; min-height: 46px; cursor: pointer; }
+.seg button + button { border-left: 1px solid var(--rule); }
+.seg button[aria-pressed="true"] { background: var(--madder); color: var(--paper); font-weight: 700; }

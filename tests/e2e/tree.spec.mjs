@@ -94,7 +94,7 @@ test('conflict', async ({ browser }) => {
   const b = await openTree(browser, s.backend, s.e);
   await select(a, 'Али');
   await a.getByRole('button', { name: 'Исправить' }).click();
-  await a.getByLabel('Подпись о супруге').fill('жена Асият');
+  await a.getByLabel('Имя супруга или супруги').fill('Асият');
   await a.getByRole('button', { name: 'Применить' }).click();
 
   await select(b, 'Али');
@@ -154,4 +154,23 @@ test('unknown token', async ({ page, context }) => {
   await installFakeApi(context, await createBackend());
   await page.goto('tree.html#t=abc');
   await expect(page.getByText('Древо не найдено. Проверьте, что ссылка скопирована целиком.')).toBeVisible();
+});
+
+test('spouse role buttons', async ({ browser }) => {
+  const s = await seed();
+  const page = await openTree(browser, s.backend, s.e);
+  await select(page, 'Патимат');
+  await page.getByRole('button', { name: 'Исправить' }).click();
+  await expect(page.getByRole('button', { name: 'муж', exact: true })).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByLabel('Имя супруга или супруги')).toHaveValue('Ахмед');
+
+  await select(page, 'Расул');
+  await page.getByRole('button', { name: 'Исправить' }).click();
+  await expect(page.getByRole('button', { name: 'жена', exact: true })).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('#panel')).toContainText('Выбрано по имени: «жена». Если неверно, переключите.');
+  await page.getByRole('button', { name: 'муж', exact: true }).click();
+  await page.getByRole('button', { name: 'жена', exact: true }).click();
+  await page.getByLabel('Имя супруга или супруги').fill('Асият');
+  await page.getByRole('button', { name: 'Применить' }).click();
+  await expect(node(page, 'Расул')).toContainText('жена Асият');
 });

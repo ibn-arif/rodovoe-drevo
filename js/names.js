@@ -17,3 +17,27 @@ export function validateName(s) {
   if (value.length > 100) return { ok: false, error: 'Слишком длинное имя' };
   return { ok: true, value };
 }
+
+// Супруг не из рода: «жена Асият» / «муж Ахмед». Роль выбирается кнопками, в поле — только имя.
+const ROLE_RE = /^(жена|муж|жёны|жены)\s+(.*)$/i;
+
+export function parseSpouse(sp) {
+  const s = String(sp ?? '').trim();
+  const m = ROLE_RE.exec(s);
+  if (!m) return { role: null, name: s };
+  return { role: m[1].toLowerCase() === 'муж' ? 'муж' : 'жена', name: m[2].trim() };
+}
+
+export function composeSpouse(role, name) {
+  const n = String(name ?? '').trim().replace(ROLE_RE, '$2').trim();
+  return n ? `${role} ${n}` : '';
+}
+
+// Угадываем по имени человека: женские аварские имена обычно на -ат, -ят, -а, -я.
+const MALE = new Set(['марат', 'муса', 'иса', 'мустафа', 'ӏиса', 'ӏиса'].map(norm));
+const FEMALE = new Set(['зайнаб', 'марьям', 'мариям', 'майсарат', 'рабиъат'].map(norm));
+export function guessRole(personName) {
+  const n = norm(String(personName ?? '').trim().split(/\s+/)[0] || '');
+  const female = FEMALE.has(n) || (!MALE.has(n) && !/(ула|улла)$/.test(n) && /(ат|ят|а|я)$/.test(n));
+  return female ? 'муж' : 'жена';
+}
