@@ -133,10 +133,10 @@ test('topdown: classic chart, parents centred above their children, black frames
         // Родитель стоит над серединой своих детей (не левее самого левого и не правее самого правого).
         const lefts = kids.map(k => k.x), rights = kids.map(k => k.x + k.w), pc = p.x + p.w / 2;
         if (pc < Math.min(...lefts) - 0.5 || pc > Math.max(...rights) + 0.5) notCentred++;
-        // Ветки со своими детьми — в одном ряду; бездетные — в том же ряду или столбиком под ним.
-        const topY = Math.min(...kids.map(k => k.y));
-        const withKids = n.children.filter(c => c.children.length).map(c => boxes.get(c.id));
-        if (withKids.some(k => Math.abs(k.y - topY) > 0.01)) notRow++;
+        // Строго сверху вниз: все дети одного родителя — в одном ряду, слева направо, без наложений.
+        const topY = kids[0].y;
+        if (kids.some(k => Math.abs(k.y - topY) > 0.01)) notRow++;
+        if (kids.some((k, i) => i > 0 && k.x < kids[i - 1].x + kids[i - 1].w)) notRow++;
         if (!(kids[0].y > p.y)) notBelow++;
         n.children.forEach(walk);
       })(root);

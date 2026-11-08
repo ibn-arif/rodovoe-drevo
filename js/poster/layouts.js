@@ -151,32 +151,18 @@ function vertical(g, root, area, theme, { up, boxes }) {
   return FS * s;
 }
 
-// ── Сверху вниз: классическая схема ─────────────────────────────────────
-// Каждый родитель — в чёрной рамке по центру над детьми, дети — в ряд ниже, поколение за поколением.
-// Последнее поколение (дети без своих детей) опускается под родителем столбиком, иначе ряд
-// у большой семьи растягивается в ленту. Имена горизонтально.
-const TD = { FS: 10, PAD: 5, GAP: 6, FAMILY_GAP: 15, LEVEL: 24, GAP_V: 5, BR: 8 };
+// ── Сверху вниз: строго классическая схема ──────────────────────────────
+// Каждый человек — в скруглённой чёрной рамке; родитель по центру над детьми, все дети в ряд ниже,
+// поколение за поколением. Линии со скруглёнными углами. Подпись в рамке — в несколько строк.
+const TD = { FS: 10, PAD: 6, GAP: 8, FAMILY_GAP: 18, LEVEL: 30, R: 6 };
 
-// Дети одного родителя делятся на «места» в ряду: ветка со своими детьми — отдельное место,
-// а бездетные братья и сёстры, идущие подряд, — один столбик.
-function slotsOf(d) {
-  const slots = [];
-  for (const c of d.children) {
-    const last = slots.at(-1);
-    if (!c.children && last && last.leaves) last.items.push(c);
-    else slots.push(c.children ? { node: c } : { leaves: true, items: [c] });
-  }
-  return slots;
-}
-
-// Подпись в рамке — в несколько строк: имя (длинное — в две строки), годы, супруг мелко.
 function boxLines(d) {
   const FS = TD.FS, size = d.depth === 0 ? FS * 1.3 : FS, weight = d.depth < 2 ? 700 : 400;
   const m = /^(.*?)\s*(\([^()]*\))\s*$/.exec(d.data.name);
   const name = m ? m[1] : d.data.name, years = m ? m[2] : '';
   const words = name.split(/\s+/);
   const nameLines = words.length > 1 && name.length > 12 ? [words[0], words.slice(1).join(' ')] : [name];
-  const lines = nameLines.map(t => ({ t, size, weight }));
+  const lines = nameLines.map(t => ({ t, size, weight, main: true }));
   if (years) lines.push({ t: years, size: size * 0.8, weight: 400 });
   if (d.data.spouse) lines.push({ t: d.data.spouse, size: size * 0.72, weight: 400, italic: true });
   return lines;
@@ -184,87 +170,68 @@ function boxLines(d) {
 const lineW = l => measure(l.t, l.size, l.weight, l.italic ? 'italic' : 'normal');
 
 function topdownMeasure(root) {
-  const { PAD, GAP, FAMILY_GAP, LEVEL, GAP_V, BR } = TD;
-  const FS = TD.FS;
-  const weight = d => d.depth < 2 ? 700 : 400;
-  const size = d => d.depth === 0 ? FS * 1.3 : FS;
+  const { PAD, GAP, FAMILY_GAP, LEVEL } = TD;
   const nodes = root.descendants();
   const lines = new Map(nodes.map(d => [d, boxLines(d)]));
   const bw = new Map(nodes.map(d => [d, Math.max(...lines.get(d).map(lineW)) + PAD * 2]));
-  const bh = new Map(nodes.map(d => [d, lines.get(d).reduce((h, l) => h + l.size * 1.25, 0) + PAD * 1.2]));
+  const bh = new Map(nodes.map(d => [d, lines.get(d).reduce((h, l) => h + l.size * 1.25, 0) + PAD * 1.4]));
+  // Высота ряда — по самой высокой рамке поколения, чтобы ряды шли ровно.
+  const rowH = [];
+  nodes.forEach(d => { rowH[d.depth] = Math.max(rowH[d.depth] || 0, bh.get(d)); });
+  const rowY = [0];
+  for (let i = 1; i < rowH.length; i++) rowY[i] = rowY[i - 1] + rowH[i - 1] + LEVEL;
   const dim = new Map();
-  const slotDim = slot => {
-    if (slot.node) return dim.get(slot.node);
-    if (slot.items.length === 1) return { w: bw.get(slot.items[0]), h: bh.get(slot.items[0]) };
-    const col = Math.max(...slot.items.map(c => bw.get(c))), n = slot.items.length;
-    return { w: col + BR * 2.5, h: slot.items.reduce((h, c) => h + bh.get(c), 0) + (n - 1) * GAP_V, col };
-  };
   for (const d of [...nodes].reverse()) {
     const w0 = bw.get(d);
-    if (!d.children) { dim.set(d, { w: w0, h: bh.get(d) }); continue; }
-    const slots = slotsOf(d).map(sl => ({ ...sl, dim: slotDim(sl) }));
-    const gap = slots.length > 1 && d.children.some(c => c.children) ? FAMILY_GAP : GAP;
-    const row = slots.reduce((sum, sl) => sum + sl.dim.w, 0) + (slots.length - 1) * gap;
-    dim.set(d, { w: Math.max(w0, row), h: bh.get(d) + LEVEL + Math.max(...slots.map(sl => sl.dim.h)), row, slots, gap });
+    if (!d.children) { dim.set(d, { w: w0 }); continue; }
+    const gap = d.children.some(c => c.children) ? FAMILY_GAP : GAP;
+    const row = d.children.reduce((sum, c) => sum + dim.get(c).w, 0) + (d.children.length - 1) * gap;
+    dim.set(d, { w: Math.max(w0, row), row, gap });
   }
-  return { nodes, bw, bh, lines, dim, size, weight, w: dim.get(root).w, h: dim.get(root).h };
+  const h = rowY.at(-1) + rowH.at(-1);
+  return { nodes, bw, bh, lines, dim, rowY, rowH, w: dim.get(root).w, h };
 }
 
 function topdown(g, root, area, theme, m = topdownMeasure(root)) {
-  const { FS, LEVEL, GAP_V, BR } = TD;
-  const { nodes, bw, bh, lines, dim, w: width, h: height } = m;
+  const { FS, LEVEL, R } = TD;
+  const { nodes, bw, bh, lines, dim, rowY, rowH, w: width, h: height } = m;
   const s = Math.min(area.w / width, area.h / height);
   const tg = el('g', { transform: `translate(${fmt(area.x + (area.w - width * s) / 2)} ${fmt(area.y + (area.h - height * s) / 2)}) scale(${fmt(s)})` }, g);
-  const pos = new Map();      // центр рамки по x и её верх по y
-  const anchors = new Map();  // куда приходит линия от родителя для каждого места
-  (function place(d, x, y) {
+  const cx = new Map();
+  (function place(d, x) {
     const dm = dim.get(d);
-    if (!d.children) { pos.set(d, { cx: x + dm.w / 2, y }); return; }
-    const cy = y + bh.get(d) + LEVEL, list = [];
+    if (!d.children) { cx.set(d, x + dm.w / 2); return; }
     let sx = x + (dm.w - dm.row) / 2;
-    for (const sl of dm.slots) {
-      if (sl.node) { place(sl.node, sx, cy); list.push({ x: pos.get(sl.node).cx, single: sl.node }); }
-      else if (sl.items.length === 1) { const c = sl.items[0]; pos.set(c, { cx: sx + sl.dim.w / 2, y: cy }); list.push({ x: sx + sl.dim.w / 2, single: c }); }
-      else {
-        const bx = sx + BR * 0.5, cx = bx + BR + sl.dim.col / 2;
-        let yy = cy;
-        for (const c of sl.items) { pos.set(c, { cx, y: yy }); yy += bh.get(c) + GAP_V; }
-        list.push({ x: bx, column: sl.items });
-      }
-      sx += sl.dim.w + dm.gap;
-    }
-    anchors.set(d, list);
-    const xs = list.map(a => a.x), half = bw.get(d) / 2;
-    const mid = (Math.min(...xs) + Math.max(...xs)) / 2;
-    pos.set(d, { cx: Math.min(Math.max(mid, x + half), x + dm.w - half), y });
-  })(root, 0, 0);
+    for (const c of d.children) { place(c, sx); sx += dim.get(c).w + dm.gap; }
+    const mid = (cx.get(d.children[0]) + cx.get(d.children.at(-1))) / 2, half = bw.get(d) / 2;
+    cx.set(d, Math.min(Math.max(mid, x + half), x + dm.w - half));
+  })(root, 0);
+  // У всех рамок поколения одна высота и ровный верх, как на классической схеме.
+  const top = d => rowY[d.depth];
+  const boxH = d => rowH[d.depth];
 
-  const line = { fill: 'none', stroke: '#000000', 'stroke-width': 0.5 };
+  const line = { fill: 'none', stroke: '#000000', 'stroke-width': 0.6, 'stroke-linecap': 'round' };
   for (const d of nodes) {
     if (!d.children) continue;
-    const p = pos.get(d), my = p.y + bh.get(d) + LEVEL / 2, list = anchors.get(d);
-    const xs = list.map(a => a.x);
-    el('path', { ...line, d: `M${fmt(p.cx)},${fmt(p.y + bh.get(d))} V${fmt(my)} M${fmt(Math.min(p.cx, ...xs))},${fmt(my)} H${fmt(Math.max(p.cx, ...xs))}` }, tg);
-    for (const a of list) {
-      if (a.single) { el('path', { ...line, d: `M${fmt(a.x)},${fmt(my)} V${fmt(my + LEVEL / 2)}` }, tg); continue; }
-      const last = pos.get(a.column.at(-1));
-      el('path', { ...line, d: `M${fmt(a.x)},${fmt(my)} V${fmt(last.y + bh.get(a.column.at(-1)) / 2)}` }, tg);
-      for (const c of a.column) {
-        const q = pos.get(c);
-        el('path', { ...line, d: `M${fmt(a.x)},${fmt(q.y + bh.get(c) / 2)} H${fmt(q.cx - bw.get(c) / 2)}` }, tg);
-      }
+    const px = cx.get(d), py = top(d) + boxH(d), my = rowY[d.depth] + rowH[d.depth] + LEVEL / 2;
+    for (const c of d.children) {
+      const x = cx.get(c), cy = top(c), dx = x - px, r = Math.min(R, Math.abs(dx) / 2);
+      if (Math.abs(dx) < 0.5) { el('path', { ...line, d: `M${fmt(px)},${fmt(py)} V${fmt(cy)}` }, tg); continue; }
+      const sgn = Math.sign(dx);
+      el('path', { ...line, d: `M${fmt(px)},${fmt(py)} V${fmt(my - r)} Q${fmt(px)},${fmt(my)} ${fmt(px + sgn * r)},${fmt(my)}`
+        + ` H${fmt(x - sgn * r)} Q${fmt(x)},${fmt(my)} ${fmt(x)},${fmt(my + r)} V${fmt(cy)}` }, tg);
     }
   }
   for (const d of nodes) {
-    const p = pos.get(d), w = bw.get(d), h = bh.get(d);
-    el('rect', { class: 'box', 'data-id': d.data.id, x: fmt(p.cx - w / 2), y: fmt(p.y), width: fmt(w), height: fmt(h), rx: FS * 0.25,
-      fill: '#FFFFFF', stroke: '#000000', 'stroke-width': 0.6 }, tg);
+    const x = cx.get(d), w = bw.get(d), h = boxH(d), y = top(d);
+    el('rect', { class: 'box', 'data-id': d.data.id, x: fmt(x - w / 2), y: fmt(y), width: fmt(w), height: fmt(h), rx: FS * 0.9,
+      fill: '#FFFFFF', stroke: '#000000', 'stroke-width': 0.7 }, tg);
     const ls = lines.get(d);
-    const t = el('text', { class: 'pn', x: fmt(p.cx), y: fmt(p.y + TD.PAD * 0.6), 'font-family': FONT, 'text-anchor': 'middle', fill: theme.ink }, tg);
+    // Текст по центру рамки по высоте.
+    const t = el('text', { class: 'pn', x: fmt(x), y: fmt(y + (h - bh.get(d)) / 2 + TD.PAD * 0.7), 'font-family': FONT, 'text-anchor': 'middle', fill: theme.ink }, tg);
     ls.forEach((l, i) => {
-      const sp = el('tspan', { x: fmt(p.cx), dy: fmt(l.size * (i === 0 ? 1 : 1.25)), 'font-size': fmt(l.size), 'font-weight': l.weight,
-        'font-style': l.italic ? 'italic' : undefined, fill: l.t === ls[0].t || (i < ls.length && !/^\(/.test(l.t) && !l.italic) ? theme.ink : theme.muted }, t);
-      sp.textContent = l.t;
+      el('tspan', { x: fmt(x), dy: fmt(l.size * (i === 0 ? 1 : 1.25)), 'font-size': fmt(l.size), 'font-weight': l.weight,
+        'font-style': l.italic ? 'italic' : undefined, fill: l.main ? theme.ink : theme.muted }, t).textContent = l.t;
     });
   }
   return FS * s;
