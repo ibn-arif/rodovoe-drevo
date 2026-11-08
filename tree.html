@@ -87,6 +87,35 @@
   <div class="history-body"></div>
 </dialog>
 
+<dialog id="poster" class="dlg dlg-wide" aria-labelledby="poster-title">
+  <div class="history-top">
+    <h2 id="poster-title">Плакат PDF</h2>
+    <form method="dialog"><button class="btn btn-quiet" type="submit">Закрыть</button></form>
+  </div>
+  <div class="poster-grid">
+    <div class="poster-opts">
+      <fieldset class="choice">
+        <legend>Дизайн</legend>
+        <label><input type="radio" name="design" value="classic" checked> Классика</label>
+        <label><input type="radio" name="design" value="topdown"> Сверху вниз</label>
+        <label><input type="radio" name="design" value="fan"> Круг</label>
+        <label><input type="radio" name="design" value="gold"> Тёмный с золотом</label>
+      </fieldset>
+      <fieldset class="choice">
+        <legend>Размер листа</legend>
+        <label><input type="radio" name="paper" value="A0" checked> A0</label>
+        <label><input type="radio" name="paper" value="A1"> A1</label>
+        <label><input type="radio" name="paper" value="A2"> A2</label>
+        <label><input type="radio" name="paper" value="A3"> A3</label>
+        <label><input type="radio" name="paper" value="A4"> A4</label>
+      </fieldset>
+      <p id="poster-status" class="muted" aria-live="polite"></p>
+      <button class="btn btn-primary" id="poster-download" type="button">Скачать PDF</button>
+    </div>
+    <div id="poster-preview" class="poster-preview" aria-label="Превью плаката"></div>
+  </div>
+</dialog>
+
 <script type="module" src="js/tree-page.js"></script>
 </body>
 </html>

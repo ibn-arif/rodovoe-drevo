@@ -10,6 +10,7 @@ import { renderPanel } from './panel.js';
 import { initDraftBar } from './draft-bar.js';
 import { renderShare } from './share.js';
 import { initHistory } from './history.js';
+import { initPoster } from './poster/dialog.js';
 
 const $ = s => document.querySelector(s);
 const api = getApi();
@@ -132,6 +133,9 @@ async function main() {
   $('#tools').hidden = false;
   $('#invite').hidden = !canEdit;
   $('#history-btn').hidden = !canEdit;
+  $('#poster-btn').hidden = false;
+  const poster = initPoster(() => state.view, () => state.server.title);
+  $('#poster-btn').addEventListener('click', () => poster.open());
   if (canEdit) {
     const history = initHistory(app);
     $('#history-btn').addEventListener('click', () => history.open());
