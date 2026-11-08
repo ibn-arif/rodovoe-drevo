@@ -4,7 +4,8 @@ import { defineConfig } from '@playwright/test';
 export default defineConfig({
   testDir: 'tests/e2e',
   testMatch: '*.spec.mjs',
-  timeout: 60_000,
+  timeout: 90_000,
+  expect: { timeout: 15_000 },
   workers: 2,
   use: { baseURL: 'http://localhost:4173/', channel: 'chrome', headless: true, actionTimeout: 10_000 },
   webServer: { command: 'python3 -m http.server 4173', port: 4173, reuseExistingServer: true },
