@@ -30,8 +30,9 @@ async function ready() {
 
 export async function posterPdf(svg, paper) {
   const fonts = await ready();
-  const [W, H] = PAPER[paper];
-  const doc = new jspdf.jsPDF({ unit: 'mm', format: [W, H], orientation: 'portrait', compress: true });
+  // Размер берём из самого плаката: «Сверху вниз» может быть альбомным.
+  const [, , W, H] = svg.getAttribute('viewBox').split(' ').map(Number);
+  const doc = new jspdf.jsPDF({ unit: 'mm', format: [W, H], orientation: W > H ? 'landscape' : 'portrait', compress: true });
   FONTS.forEach(([file, style, weight], i) => {
     doc.addFileToVFS(file, fonts[i]);
     doc.addFont(file, 'PTSerif', style, weight);

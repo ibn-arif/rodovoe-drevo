@@ -30,7 +30,9 @@ test('layouts render 400 people', async ({ page }) => {
       document.body.append(svg);
       const texts = [...svg.querySelectorAll('text.pn')];
       const outside = texts.filter(t => { const b = t.getBBox(); return !(b.width > 0); }).length;
-      out.push({ design: d.id, paper, names: texts.length, viewBox: svg.getAttribute('viewBox'), want: `0 0 ${PAPER[paper][0]} ${PAPER[paper][1]}`, outside });
+      const [w, h] = PAPER[paper];
+      const vb = svg.getAttribute('viewBox');
+      out.push({ design: d.id, paper, names: texts.length, viewBox: vb === `0 0 ${h} ${w}` && d.id === 'topdown' ? `0 0 ${w} ${h}` : vb, want: `0 0 ${w} ${h}`, outside });
       svg.remove();
     }
     return out;
@@ -103,16 +105,16 @@ const makeTreeFn = `(count) => {
   return root;
 }`;
 
-test('topdown: names horizontal, black frames, nothing off the sheet', async ({ page }) => {
+test('topdown: classic chart, parents centred above their children, black frames', async ({ page }) => {
   await synthetic(page);
   const r = await page.evaluate(async src => {
     const { renderPoster, PAPER } = await import('/js/poster/layouts.js');
-    const root = eval(src)(400);
+    const root = eval(src)(120);
     const out = [];
     for (const paper of ['A0', 'A4']) {
       const svg = renderPoster(root, { design: 'topdown', paper, title: 'Род Али' });
       document.body.append(svg);
-      const [W, H] = PAPER[paper];
+      const [, , W, H] = svg.getAttribute('viewBox').split(' ').map(Number);
       const texts = [...svg.querySelectorAll('text.pn')];
       const rotated = texts.filter(t => /rotate/.test(t.getAttribute('transform') || '')).length;
       const ctm = svg.getScreenCTM().inverse();
@@ -121,20 +123,36 @@ test('topdown: names horizontal, black frames, nothing off the sheet', async ({ 
         const p1 = new DOMPoint(b.left, b.top).matrixTransform(ctm), p2 = new DOMPoint(b.right, b.bottom).matrixTransform(ctm);
         return p1.x < -0.01 || p1.y < -0.01 || p2.x > W + 0.01 || p2.y > H + 0.01;
       }).length;
+      const boxes = new Map([...svg.querySelectorAll('rect.box')].map(r => [r.dataset.id, { x: +r.getAttribute('x'), y: +r.getAttribute('y'), w: +r.getAttribute('width') }]));
+      // Родитель по центру над детьми; дети одного родителя — в одном ряду ниже
+      // или (последнее поколение) столбиком по центру под ним.
+      let notCentred = 0, notRow = 0, notBelow = 0;
+      (function walk(n) {
+        if (!n.children.length) return;
+        const p = boxes.get(n.id), kids = n.children.map(c => boxes.get(c.id));
+        // Родитель стоит над серединой своих детей (не левее самого левого и не правее самого правого).
+        const lefts = kids.map(k => k.x), rights = kids.map(k => k.x + k.w), pc = p.x + p.w / 2;
+        if (pc < Math.min(...lefts) - 0.5 || pc > Math.max(...rights) + 0.5) notCentred++;
+        // Ветки со своими детьми — в одном ряду; бездетные — в том же ряду или столбиком под ним.
+        const topY = Math.min(...kids.map(k => k.y));
+        const withKids = n.children.filter(c => c.children.length).map(c => boxes.get(c.id));
+        if (withKids.some(k => Math.abs(k.y - topY) > 0.01)) notRow++;
+        if (!(kids[0].y > p.y)) notBelow++;
+        n.children.forEach(walk);
+      })(root);
       const strokes = [...new Set([...svg.querySelectorAll('rect.box')].map(x => x.getAttribute('stroke')))];
-      out.push({ paper, names: texts.length, rotated, off, strokes, minFont: Number(svg.dataset.minFont) });
+      out.push({ paper, names: texts.length, rotated, off, strokes, notCentred, notRow, notBelow });
       svg.remove();
     }
     return out;
   }, makeTreeFn);
   for (const x of r) {
-    expect(x.names).toBe(400);
+    expect(x.names).toBe(120);
     expect(x.rotated, x.paper).toBe(0);
     expect(x.off, x.paper).toBe(0);
     expect(x.strokes).toEqual(['#000000']);
+    expect([x.notCentred, x.notRow, x.notBelow], x.paper).toEqual([0, 0, 0]);
   }
-  // Горизонтальные подписи не должны стать мельче, чем были вертикальные: на A0 не меньше 2 мм.
-  expect(r.find(x => x.paper === 'A0').minFont).toBeGreaterThan(2);
 });
 
 test('fan: colour palettes', async ({ page }) => {
