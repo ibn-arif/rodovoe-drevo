@@ -21,3 +21,8 @@ test('validateName', () => {
   assert.deepEqual(validateName('Али\nРасул'), { ok: false, error: 'Имя в одну строку' });
   assert.equal(validateName('а'.repeat(100)).ok, true);
 });
+
+test('validateName rejects invisible and control-character names', () => {
+  for (const bad of ['\u00a0\u200b', 'Али\u000b', 'Али\u2028Расул', '\u200b\u200b']) assert.equal(validateName(bad).ok, false, JSON.stringify(bad));
+  assert.deepEqual(validateName('\u00a0Али\u00a0'), { ok: true, value: 'Али' });
+});

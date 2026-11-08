@@ -1,5 +1,5 @@
 // Полоска черновика: счётчик, список изменений, «Сохранить» и разбор конфликтов.
-import { describeOps } from './model.js';
+import { describeOps, dropConflicting } from './model.js';
 import { validateName } from './names.js';
 import { plural, ago } from './util.js';
 import { errorText } from './api.js';
@@ -8,15 +8,6 @@ import { safeLocalStorage } from './draft.js';
 const $ = s => document.querySelector(s);
 const AUTHOR = 'drevo:author';
 
-// Люди, которых правка трогает (чтобы убрать пункты, попавшие в конфликт).
-function opPeople(op, snapshot) {
-  const ids = [op.person_id, op.parent_id, op.child_id, op.a_id, op.b_id];
-  if (op.type === 'unmarry') {
-    const m = snapshot.marriages.find(x => x.id === op.marriage_id);
-    if (m) ids.push(m.a_id, m.b_id);
-  }
-  return ids.filter(Boolean);
-}
 
 // app: { state, api, refresh(): Promise, rerender() }
 export function initDraftBar(app) {
@@ -101,12 +92,12 @@ export function initDraftBar(app) {
     drop.textContent = 'Убрать эти пункты';
     drop.addEventListener('click', async () => {
       const ids = new Set(conflicts.map(c => c.person_id));
-      const { draft, server } = app.state;
-      for (let i = draft.ops.length - 1; i >= 0; i--) {
-        if (opPeople(draft.ops[i], server).some(id => ids.has(id))) draft.remove(i);
-      }
+      const { draft } = app.state;
       dlg.close();
       await app.refresh();
+      const keep = dropConflicting(app.state.server, draft.ops, ids);
+      draft.clear();
+      keep.forEach(op => draft.add(op));
       draft.setBase(app.state.server.version);
     });
     const over = document.createElement('button');
@@ -114,7 +105,8 @@ export function initDraftBar(app) {
     over.className = 'btn btn-primary';
     over.textContent = 'Сохранить поверх';
     over.addEventListener('click', () => save(true));
-    actions.append(drop, over);
+    // Удалённых людей «поверх» не сохранить — кнопку не показываем.
+    if (conflicts.some(c => c.reason === 'deleted')) actions.append(drop); else actions.append(drop, over);
     box.replaceChildren(p, ul, actions);
     box.hidden = false;
     $('#save-actions').hidden = true;

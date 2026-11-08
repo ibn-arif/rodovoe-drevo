@@ -33,6 +33,10 @@ export function treeLink(token, base = baseUrl()) {
 export function readTokenFromHash(hash) {
   const m = /(?:^#|&)t=([^&]*)/.exec(hash || '');
   if (!m) return null;
-  const t = decodeURIComponent(m[1]).trim();
-  return t || null;
+  try {
+    const t = decodeURIComponent(m[1]).trim();
+    return t || null;
+  } catch {
+    return null;   // испорченная ссылка — покажем «Древо не найдено», а не пустой экран
+  }
 }

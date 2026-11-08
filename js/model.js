@@ -24,9 +24,9 @@ export function buildTree(snapshot) {
 }
 
 function descendants(people, id) {
-  const out = [id];
+  const out = [id], seen = new Set(out);
   for (let i = 0; i < out.length; i++) {
-    for (const p of people) if (p.parent_id === out[i]) out.push(p.id);
+    for (const p of people) if (p.parent_id === out[i] && !seen.has(p.id)) { seen.add(p.id); out.push(p.id); }
   }
   return out;
 }
@@ -139,6 +139,28 @@ export function describeOp(op, snapshot) {
     }
     default: return 'Изменение';
   }
+}
+
+// Люди, которых правка трогает.
+export function opPeople(op, snapshot) {
+  const ids = [op.person_id, op.parent_id, op.child_id, op.a_id, op.b_id];
+  if (op.type === 'unmarry') {
+    const m = snapshot.marriages.find(x => x.id === op.marriage_id);
+    if (m) ids.push(m.a_id, m.b_id);
+  }
+  return ids.filter(Boolean);
+}
+
+// Убирает из черновика правки людей из конфликта, а потом — правки, которые без них уже не применить
+// (например, ребёнок, добавленный к удалённому человеку).
+export function dropConflicting(snapshot, ops, conflictIds) {
+  const kept = ops.filter(op => !opPeople(op, snapshot).some(id => conflictIds.has(id)));
+  const out = [];
+  let s = snapshot;
+  for (const op of kept) {
+    try { s = applyOps(s, [op]); out.push(op); } catch { /* зависела от убранной правки */ }
+  }
+  return out;
 }
 
 // Описывает каждую правку относительно состояния перед ней.

@@ -27,3 +27,7 @@ test('links', () => {
   assert.equal(readTokenFromHash(''), null);
   assert.equal(readTokenFromHash('#t=abc%20'), 'abc');
 });
+
+test('malformed percent-encoding gives no token instead of throwing', () => {
+  assert.equal(readTokenFromHash('#t=ab%E0%'), null);
+});

@@ -53,7 +53,11 @@ function rerender() {
   document.title = `${state.server.title} — Родовое древо`;
   $('#title').textContent = state.server.title;
   $('#count').textContent = `${v.people.length} чел.`;
-  view.render(buildTree(v), { query: state.query, selectedId: state.selectedId, marriages: v.marriages });
+  const root = buildTree(v);
+  if (!root) { fatal('Древо повреждено: нет верхнего человека. Создатель может откатить последние изменения в истории.'); return; }
+  $('#stage').hidden = false;
+  $('#fatal').hidden = true;
+  view.render(root, { query: state.query, selectedId: state.selectedId, marriages: v.marriages });
   renderFound();
   if (state.selectedId) openPanel(state.selectedId);
   bar.render();

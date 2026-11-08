@@ -9,13 +9,18 @@ create table if not exists public.trees (
   id          uuid primary key default gen_random_uuid(),
   title       text not null,
   root_id     uuid,
-  owner_hash  text not null unique,
-  edit_hash   text not null unique,
-  view_hash   text not null unique,
   version     bigint not null default 0,
   is_example  boolean not null default false,
   created_at  timestamptz not null default now()
 );
+
+-- Хэши всех ссылок в одной таблице: один и тот же хэш не может принадлежать двум древам или ролям.
+create table if not exists public.tree_tokens (
+  hash     text primary key,
+  tree_id  uuid not null references public.trees(id) on delete cascade,
+  role     text not null check (role in ('owner', 'edit', 'view'))
+);
+create index if not exists tree_tokens_tree on public.tree_tokens(tree_id);
 
 create table if not exists public.people (
   id          uuid primary key,
@@ -62,6 +67,12 @@ create table if not exists public.edits (
 );
 create index if not exists edits_save on public.edits(save_id);
 
+create table if not exists public.save_log (
+  ip  text not null,
+  at  timestamptz not null default now()
+);
+create index if not exists save_log_at on public.save_log(ip, at);
+
 create table if not exists public.tree_creations (
   ip  text not null,
   at  timestamptz not null default now()
@@ -74,6 +85,8 @@ alter table public.marriages enable row level security;
 alter table public.saves enable row level security;
 alter table public.edits enable row level security;
 alter table public.tree_creations enable row level security;
+alter table public.tree_tokens enable row level security;
+alter table public.save_log enable row level security;
 revoke all on all tables in schema public from anon, authenticated, public;
 revoke all on all sequences in schema public from anon, authenticated, public;
 
@@ -87,35 +100,43 @@ create or replace function drevo_private.role(p_token text, out tree_id uuid, ou
 language plpgsql stable as $$
 declare h text := drevo_private.hash(p_token);
 begin
-  select t.id, case when t.owner_hash = h then 'owner' when t.edit_hash = h then 'edit' else 'view' end
-    into tree_id, role
-    from public.trees t
-   where t.owner_hash = h or t.edit_hash = h or t.view_hash = h;
+  select k.tree_id, k.role into tree_id, role from public.tree_tokens k where k.hash = h;
   if tree_id is null then raise exception 'tree_not_found'; end if;
 end $$;
 
--- Имя: обрезать края, 1..100 символов, в одну строку. Иначе bad_name.
+-- Имя: обрезать пробелы и невидимые символы по краям, 1..100 символов, без управляющих символов
+-- и переводов строки, хотя бы один видимый символ. Иначе bad_name. Те же правила — в js/names.js.
 create or replace function drevo_private.clean_name(p text) returns text
 language plpgsql immutable as $$
-declare s text := btrim(coalesce(p, ''), E' \t');
+declare s text := regexp_replace(coalesce(p, ''),
+  '^[ \t\u00a0\u200b-\u200d\u2060\ufeff]+|[ \t\u00a0\u200b-\u200d\u2060\ufeff]+$', '', 'g');
 begin
-  if s = '' or length(s) > 100 or s ~ E'[\\r\\n]' then raise exception 'bad_name'; end if;
+  if s = '' or length(s) > 100 or s ~ '[\u0001-\u001f\u007f\u2028\u2029]'
+     or s !~ '[^ \t\u00a0\u200b-\u200f\u2060-\u2064\ufeff]' then
+    raise exception 'bad_name';
+  end if;
   return s;
 end $$;
 
 -- Подпись о супруге: может быть пустой, иначе те же правила, что у имени.
 create or replace function drevo_private.clean_spouse(p text) returns text
 language plpgsql immutable as $$
-declare s text := btrim(coalesce(p, ''), E' \t');
 begin
-  if s = '' then return ''; end if;
-  return drevo_private.clean_name(s);
+  if btrim(coalesce(p, ''), E' \t') = '' then return ''; end if;
+  return drevo_private.clean_name(p);
 end $$;
 
+-- Адрес клиента: cf-connecting-ip ставит прокси Cloudflare перед Supabase, его не подделать.
+-- Без него — последний адрес в x-forwarded-for (его дописал ближайший прокси), а не первый (его прислал клиент).
 create or replace function drevo_private.client_ip() returns text
 language sql stable as $$
-  select coalesce(nullif(btrim(split_part(
-    (nullif(current_setting('request.headers', true), '')::json ->> 'x-forwarded-for'), ',', 1)), ''), 'local')
+  with hd as (select nullif(current_setting('request.headers', true), '')::json j)
+  select coalesce(
+    nullif(btrim(j ->> 'cf-connecting-ip'), ''),
+    nullif(btrim((regexp_split_to_array(coalesce(j ->> 'x-forwarded-for', ''), ','))[
+      array_length(regexp_split_to_array(coalesce(j ->> 'x-forwarded-for', ''), ','), 1)]), ''),
+    'local')
+  from hd
 $$;
 
 -- ── Публичные функции ────────────────────────────────────────────────
@@ -134,11 +155,12 @@ declare
   v_root uuid := gen_random_uuid();
 begin
   if (select count(*) from tree_creations where ip = v_ip and at > now() - interval '1 hour') >= 5
-     or (select count(*) from tree_creations where at > now() - interval '1 day') >= 300 then
+     or (select count(*) from tree_creations where at > now() - interval '1 day') >= 2000 then
     raise exception 'too_many_trees';
   end if;
   if p_owner_hash !~ '^[0-9a-f]{64}$' or p_edit_hash !~ '^[0-9a-f]{64}$' or p_view_hash !~ '^[0-9a-f]{64}$'
-     or p_owner_hash in (p_edit_hash, p_view_hash) or p_edit_hash = p_view_hash then
+     or p_owner_hash in (p_edit_hash, p_view_hash) or p_edit_hash = p_view_hash
+     or exists (select 1 from tree_tokens where hash in (p_owner_hash, p_edit_hash, p_view_hash)) then
     raise exception 'bad_token';
   end if;
   if v_title = '' then v_title := 'Род ' || v_name; end if;
@@ -146,8 +168,13 @@ begin
 
   insert into tree_creations(ip) values (v_ip);
   delete from tree_creations where at < now() - interval '2 days';
-  insert into trees(title, owner_hash, edit_hash, view_hash) values (v_title, p_owner_hash, p_edit_hash, p_view_hash)
-    returning id into v_tree;
+  insert into trees(title) values (v_title) returning id into v_tree;
+  begin
+    insert into tree_tokens(hash, tree_id, role)
+      values (p_owner_hash, v_tree, 'owner'), (p_edit_hash, v_tree, 'edit'), (p_view_hash, v_tree, 'view');
+  exception when unique_violation then
+    raise exception 'bad_token';
+  end;
   insert into people(id, tree_id, name) values (v_root, v_tree, v_name);
   update trees set root_id = v_root where id = v_tree;
   return jsonb_build_object('tree_id', v_tree, 'root_id', v_root);
@@ -167,7 +194,9 @@ begin
         'updated_by', p.updated_by, 'updated_at', p.updated_at) order by p.pos)
       from people p where p.tree_id = t.id and p.deleted_by is null), '[]'::jsonb),
     'marriages', coalesce((select jsonb_agg(jsonb_build_object('id', m.id, 'a_id', m.a_id, 'b_id', m.b_id))
-      from marriages m where m.tree_id = t.id and m.deleted_by is null), '[]'::jsonb));
+      from marriages m where m.tree_id = t.id and m.deleted_by is null
+       and exists (select 1 from people a where a.id = m.a_id and a.deleted_by is null)
+       and exists (select 1 from people b where b.id = m.b_id and b.deleted_by is null)), '[]'::jsonb));
 end $$;
 
 create or replace function public.tree_version(p_token text) returns bigint
@@ -206,7 +235,7 @@ $$;
 
 -- Люди, которых правка меняет напрямую (для поиска конфликтов) и на которых она опирается.
 create or replace function drevo_private.op_targets(p_op jsonb, out changed uuid[], out needed uuid[])
-language plpgsql immutable as $$
+language plpgsql stable as $$
 begin
   changed := '{}'; needed := '{}';
   case p_op ->> 'type'
@@ -217,12 +246,24 @@ begin
                      needed := array[drevo_private.uuid_of(p_op, 'parent_id')];
     when 'delete' then changed := array[drevo_private.uuid_of(p_op, 'person_id')];
     when 'marry' then changed := array[drevo_private.uuid_of(p_op, 'a_id'), drevo_private.uuid_of(p_op, 'b_id')];
+    when 'unmarry' then
+      select array[m.a_id, m.b_id] into changed from public.marriages m where m.id = drevo_private.uuid_of(p_op, 'marriage_id');
+      changed := coalesce(changed, '{}');
     else null;
   end case;
 end $$;
 
 create or replace function drevo_private.next_pos(p_parent uuid) returns int
 language sql stable as $$ select coalesce(max(pos) + 1, 0) from people where parent_id = p_parent $$;
+
+-- Правка только из известных полей: лишнее не попадает в журнал.
+create or replace function drevo_private.clean_op(p jsonb) returns jsonb
+language sql immutable as $$
+  select jsonb_strip_nulls(jsonb_build_object(
+    'type', p ->> 'type', 'id', p ->> 'id', 'person_id', p ->> 'person_id', 'parent_id', p ->> 'parent_id',
+    'child_id', p ->> 'child_id', 'a_id', p ->> 'a_id', 'b_id', p ->> 'b_id', 'marriage_id', p ->> 'marriage_id',
+    'name', left(p ->> 'name', 200), 'spouse', left(p ->> 'spouse', 200)))
+$$;
 
 -- Применяет одну правку, пишет её в журнал. Возвращает id записи журнала.
 create or replace function drevo_private.apply_op(p_tree uuid, p_save bigint, p_author text, p_op jsonb) returns bigint
@@ -234,7 +275,7 @@ declare
   v_root uuid; v_ids uuid[]; v_before jsonb; v_after jsonb;
   v_name text; v_spouse text;
 begin
-  insert into edits(save_id, op) values (p_save, p_op) returning id into v_edit;
+  insert into edits(save_id, op) values (p_save, drevo_private.clean_op(p_op)) returning id into v_edit;
   select root_id into v_root from trees where id = p_tree;
 
   if v_type = 'add_child' then
@@ -276,7 +317,7 @@ begin
     if v_p.id = v_root then raise exception 'root_protected'; end if;
     v_q := drevo_private.alive(p_tree, drevo_private.uuid_of(p_op, 'parent_id'));
     if exists (
-      with recursive sub(id) as (select v_p.id union all select c.id from people c join sub on c.parent_id = sub.id)
+      with recursive sub(id) as (select v_p.id union select c.id from people c join sub on c.parent_id = sub.id)
       select 1 from sub where id = v_q.id) then raise exception 'cycle'; end if;
     update people set parent_id = v_q.id, pos = drevo_private.next_pos(v_q.id), updated_by = p_author, updated_at = now()
      where id = v_p.id returning * into v_q;
@@ -287,7 +328,7 @@ begin
     if v_p.id = v_root then raise exception 'root_protected'; end if;
     with recursive sub(id) as (
       select v_p.id
-      union all
+      union
       select c.id from people c join sub on c.parent_id = sub.id where c.deleted_by is null)
     select array_agg(id) into v_ids from sub;
     update people set deleted_by = v_edit, updated_by = p_author, updated_at = now() where id = any(v_ids);
@@ -324,6 +365,19 @@ begin
   return v_edit;
 end $$;
 
+-- Не больше 120 сохранений в час на древо и 600 в час с одного адреса.
+create or replace function drevo_private.limit_saves(p_tree uuid) returns void
+language plpgsql as $$
+declare v_ip text := drevo_private.client_ip();
+begin
+  if (select count(*) from public.saves where tree_id = p_tree and created_at > now() - interval '1 hour') >= 120
+     or (select count(*) from public.save_log where ip = v_ip and at > now() - interval '1 hour') >= 600 then
+    raise exception 'too_many_saves';
+  end if;
+  insert into public.save_log(ip) values (v_ip);
+  delete from public.save_log where at < now() - interval '2 hours';
+end $$;
+
 create or replace function public.save_changes(p_token text, p_author text, p_base_version bigint,
   p_ops jsonb, p_force boolean default false) returns jsonb
 language plpgsql security definer set search_path = public as $$
@@ -335,10 +389,10 @@ begin
   select * into r from drevo_private.role(p_token);
   if r.role not in ('owner', 'edit') then raise exception 'forbidden'; end if;
   v_author := drevo_private.clean_name(p_author);
-  if jsonb_typeof(p_ops) <> 'array' or jsonb_array_length(p_ops) = 0 or jsonb_array_length(p_ops) > 5000 then
-    raise exception 'bad_op';
-  end if;
+  if jsonb_typeof(p_ops) <> 'array' or jsonb_array_length(p_ops) = 0 then raise exception 'bad_op'; end if;
+  if jsonb_array_length(p_ops) > 5000 or octet_length(p_ops::text) > 1000000 then raise exception 'too_large'; end if;
   perform 1 from trees where id = r.tree_id for update;
+  perform drevo_private.limit_saves(r.tree_id);
 
   -- Кого черновик трогает (кроме людей, которых он сам создаёт).
   for v_op in select * from jsonb_array_elements(p_ops) loop
@@ -380,6 +434,9 @@ begin
   for v_op in select * from jsonb_array_elements(p_ops) loop
     perform drevo_private.apply_op(r.tree_id, v_save, v_author, v_op);
   end loop;
+  if (select count(*) from people where tree_id = r.tree_id and deleted_by is null) > 10000 then
+    raise exception 'too_large';
+  end if;
   return jsonb_build_object('ok', true, 'save_id', v_save, 'version', v_version);
 end $$;
 
@@ -399,13 +456,21 @@ begin
     v_id := (p_edit.after ->> 'id')::uuid;
     with recursive sub(id) as (
       select id from people where id = v_id and deleted_by is null
-      union all
+      union
       select c.id from people c join sub on c.parent_id = sub.id where c.deleted_by is null)
     select array_agg(id) into v_ids from sub;
     update people set deleted_by = v_edit, updated_by = p_author, updated_at = now() where id = any(v_ids);
 
   elsif v_type = 'add_parent' then
     v_old := p_edit.before -> 'child';
+    v_id := (p_edit.after -> 'person' ->> 'id')::uuid;
+    -- Откат возможен, только пока добавленный предок — корень и у него один ребёнок: прежний корень.
+    if (select root_id from trees where id = p_tree) is distinct from v_id
+       or not exists (select 1 from people where id = v_id and deleted_by is null)
+       or not exists (select 1 from people where id = (v_old ->> 'id')::uuid and deleted_by is null and parent_id = v_id)
+       or (select count(*) from people where parent_id = v_id and deleted_by is null) <> 1 then
+      raise exception 'cannot_revert';
+    end if;
     update people set parent_id = null, pos = (v_old ->> 'pos')::int, updated_by = p_author, updated_at = now()
      where id = (v_old ->> 'id')::uuid;
     update trees set root_id = (p_edit.before ->> 'root_id')::uuid where id = p_tree;
@@ -424,10 +489,24 @@ begin
     if not exists (select 1 from people where id = v_id and deleted_by is null) then
       raise exception 'cannot_revert';
     end if;
+    -- Прежний родитель мог оказаться внутри ветки переносимого человека — тогда откат замкнёт цикл.
+    if exists (
+      with recursive sub(id) as (
+        select (p_edit.before ->> 'id')::uuid
+        union
+        select c.id from people c join sub on c.parent_id = sub.id)
+      select 1 from sub where id = v_id) then
+      raise exception 'cannot_revert';
+    end if;
     update people set parent_id = v_id, pos = (p_edit.before ->> 'pos')::int, updated_by = p_author, updated_at = now()
      where id = (p_edit.before ->> 'id')::uuid;
 
   elsif v_type = 'delete' then
+    -- Вернуть ветку можно, только если её родитель жив.
+    if exists (select 1 from people x where x.id = (p_edit.op ->> 'person_id')::uuid and x.parent_id is not null
+               and not exists (select 1 from people y where y.id = x.parent_id and y.deleted_by is null)) then
+      raise exception 'cannot_revert';
+    end if;
     update people set deleted_by = null, updated_by = p_author, updated_at = now() where deleted_by = p_edit.id;
 
   elsif v_type = 'marry' then

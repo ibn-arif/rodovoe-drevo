@@ -22,10 +22,10 @@ export function buildExampleSql(data, ownerToken = randomBytes(16).toString('bas
 do $$
 declare v_tree uuid;
 begin
-  if exists (select 1 from public.trees where view_hash = ${q(hash(VIEW_TOKEN))}) then return; end if;
-  insert into public.trees(title, owner_hash, edit_hash, view_hash, is_example)
-    values (${q(data.title)}, ${q(hash(ownerToken))}, ${q(hash(derive(ownerToken, 'edit')))}, ${q(hash(VIEW_TOKEN))}, true)
-    returning id into v_tree;
+  if exists (select 1 from public.tree_tokens where hash = ${q(hash(VIEW_TOKEN))}) then return; end if;
+  insert into public.trees(title, is_example) values (${q(data.title)}, true) returning id into v_tree;
+  insert into public.tree_tokens(hash, tree_id, role) values
+    (${q(hash(ownerToken))}, v_tree, 'owner'), (${q(hash(derive(ownerToken, 'edit')))}, v_tree, 'edit'), (${q(hash(VIEW_TOKEN))}, v_tree, 'view');
   insert into public.people(id, tree_id, parent_id, pos, name, spouse, updated_by) values
     ${rows.join(',\n    ')};
   update public.trees set root_id = ${q(rootId)} where id = v_tree;

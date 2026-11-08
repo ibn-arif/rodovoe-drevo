@@ -4,7 +4,7 @@ import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
 
 const SUPABASE_JS = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0/+esm';
 const CODES = ['tree_not_found', 'forbidden', 'bad_name', 'bad_op', 'bad_token', 'cycle', 'root_protected',
-  'not_root', 'too_many_trees', 'already_reverted', 'cannot_revert'];
+  'not_root', 'too_many_trees', 'too_many_saves', 'too_large', 'already_reverted', 'cannot_revert'];
 
 let clientPromise;
 function client() {
@@ -55,7 +55,9 @@ export const ERROR_TEXT = {
   not_root: 'Предка можно добавить только самому верхнему человеку.',
   too_many_trees: 'Слишком много новых древ за короткое время. Попробуйте через час.',
   already_reverted: 'Это уже откачено.',
-  cannot_revert: 'Откатить нельзя: прежнего родителя больше нет в древе.',
+  cannot_revert: 'Откатить нельзя: после этого древо изменилось, и откат его сломает. Сначала откатите более поздние изменения.',
+  too_many_saves: 'Слишком много сохранений подряд. Подождите немного и сохраните ещё раз.',
+  too_large: 'Слишком большое изменение или древо. Сохраните частями.',
   network: 'Нет связи с сервером. Проверьте интернет и попробуйте ещё раз.',
 };
 export const errorText = e => ERROR_TEXT[e?.message] ?? ERROR_TEXT.network;

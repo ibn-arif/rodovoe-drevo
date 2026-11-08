@@ -113,3 +113,20 @@ test('describeEdit uses the stored before/after', async () => {
   assert.equal(e({ type: 'unmarry' }, { a: 'Али', b: 'Патимат' }, null), 'Убран брак: Али и Патимат');
   assert.equal(e({ type: 'add_child' }, null, { id: 'x', parent_id: 'gone', name: 'Али' }), 'Добавлен ребёнок: Али');
 });
+
+test('countBranch survives a parent cycle', () => {
+  const s = { root_id: 'r', marriages: [], people: [P('r', null, 0, 'Р'), P('a', 'p', 0, 'А'), P('p', 'a', 0, 'П')] };
+  assert.equal(countBranch(s, 'a'), 2);
+});
+
+test('dropConflicting removes ops on conflicting people and ops that depended on them', async () => {
+  const { dropConflicting } = await import('../../js/model.js');
+  const ops = [
+    { type: 'add_child', id: 'x', parent_id: 'pat', name: 'Икс', spouse: '' },
+    { type: 'add_child', id: 'y', parent_id: 'x', name: 'Игрек', spouse: '' },
+    { type: 'update', person_id: 'ali', spouse: 'жена Асият' },
+  ];
+  // Патимат удалили на сервере: снимок уже без неё.
+  const server = applyOps(snap(), [{ type: 'delete', person_id: 'pat' }]);
+  assert.deepEqual(dropConflicting(server, ops, new Set(['pat'])), [ops[2]]);
+});
