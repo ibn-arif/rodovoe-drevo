@@ -34,7 +34,7 @@ function drevo_client_ip(): string {
 }
 
 final class Drevo {
-  private const PUBLIC = ['ping', 'create_tree', 'open_tree', 'tree_version', 'save_changes', 'revert', 'get_history', 'deleted_items'];
+  private const PUBLIC = ['ping', 'create_tree', 'open_tree', 'tree_version', 'save_changes', 'revert', 'get_history', 'deleted_items', 'delete_tree'];
   private const EDGE = '/^[ \t\x{00a0}\x{200b}-\x{200d}\x{2060}\x{feff}]+|[ \t\x{00a0}\x{200b}-\x{200d}\x{2060}\x{feff}]+$/u';
   private bool $mysql;
 
@@ -493,5 +493,21 @@ final class Drevo {
       return ['edit_id' => (int)$e['id'], 'save_id' => (int)$e['save_id'], 'person_id' => $op['person_id'] ?? null,
         'name' => $b['name'] ?? '', 'count' => (int)($a['count'] ?? 0), 'by' => $e['author'], 'at' => $e['created_at']];
     }, $rows);
+  }
+
+  // Удаление древа целиком — только по ссылке создателя и с точным названием в подтверждение. Отменить нельзя.
+  public function delete_tree(mixed $token, mixed $title): bool {
+    $r = $this->role(is_string($token) ? $token : null);
+    if ($r['role'] !== 'owner') fail('forbidden');
+    $tree = $r['tree_id'];
+    return $this->tx($tree, function () use ($tree, $title) {
+      $t = $this->one('SELECT title FROM trees WHERE id = ?', [$tree]);
+      if (!$t || !is_string($title) || trim($title) !== trim($t['title'])) fail('wrong_title');
+      $this->q('DELETE FROM edit_people WHERE edit_id IN (SELECT e.id FROM edits e JOIN saves s ON s.id = e.save_id WHERE s.tree_id = ?)', [$tree]);
+      $this->q('DELETE FROM edits WHERE save_id IN (SELECT id FROM saves WHERE tree_id = ?)', [$tree]);
+      foreach (['saves', 'marriages', 'people', 'tree_tokens'] as $table) $this->q("DELETE FROM $table WHERE tree_id = ?", [$tree]);
+      $this->q('DELETE FROM trees WHERE id = ?', [$tree]);
+      return true;
+    });
   }
 }

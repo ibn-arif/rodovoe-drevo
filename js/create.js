@@ -3,7 +3,7 @@ import { getApi, errorText } from './api.js';
 import { newToken, derive, hashToken, treeLink } from './tokens.js';
 import { validateName } from './names.js';
 import { renderShare } from './share.js';
-import { myTrees, rememberTree } from './mine.js';
+import { myTrees, rememberTree, forgetTree } from './mine.js';
 
 const $ = s => document.querySelector(s);
 
@@ -15,7 +15,14 @@ function showMine() {
     const a = document.createElement('a');
     a.href = treeLink(t.owner);
     a.textContent = t.title;
-    li.append(a);
+    const x = document.createElement('button');
+    x.type = 'button';
+    x.className = 'btn btn-quiet mine-forget';
+    x.textContent = '×';
+    x.title = 'Убрать из списка';
+    x.setAttribute('aria-label', `Убрать «${t.title}» из списка. Само древо останется, ссылки продолжат работать.`);
+    x.addEventListener('click', () => { forgetTree(t.owner); showMine(); });
+    li.append(a, x);
     return li;
   }));
 }
@@ -62,4 +69,9 @@ $('#create').addEventListener('submit', async e => {
   }
 });
 
+if (location.hash === '#deleted') {
+  $('#notice').textContent = 'Древо удалено. Ссылки на него больше не открываются.';
+  $('#notice').hidden = false;
+  history.replaceState(null, '', location.pathname);
+}
 showMine();

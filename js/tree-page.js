@@ -12,7 +12,7 @@ import { renderShare } from './share.js';
 import { initHistory } from './history.js';
 import { initPoster } from './poster/dialog.js';
 import { initHelp } from './help.js';
-import { rememberTree } from './mine.js';
+import { rememberTree, forgetTree } from './mine.js';
 
 const $ = s => document.querySelector(s);
 const api = getApi();
@@ -164,9 +164,39 @@ async function main() {
     renderShare($('#invite-share'), tokens, state.server.title.replace(/^Род/, 'древо рода'));
     $('#invite-dialog').showModal();
   });
+  if (state.role === 'owner') initDeleteTree();
   window.addEventListener('hashchange', () => location.reload());
   rerender();
   setInterval(poll, POLL_MS);
+}
+
+// Удаление древа целиком: только создатель, с вводом названия в подтверждение.
+function initDeleteTree() {
+  const dlg = $('#delete-dialog'), input = $('#delete-confirm-title'), go = $('#delete-confirm'), err = $('#delete-error');
+  const matches = () => input.value.trim() === state.server.title.trim();
+  $('#delete-tree-btn').hidden = false;
+  $('#delete-tree-btn').addEventListener('click', () => {
+    $('#invite-dialog').close();
+    $('#delete-tree-title').textContent = state.server.title;
+    input.value = ''; go.disabled = true; err.hidden = true;
+    dlg.showModal();
+    input.focus();
+  });
+  input.addEventListener('input', () => { go.disabled = !matches(); });
+  go.addEventListener('click', async () => {
+    if (!matches()) return;
+    go.disabled = true;
+    try {
+      await api.deleteTree(state.token, input.value);
+      forgetTree(state.token);
+      state.draft?.clear?.();
+      location.replace('index.html#deleted');
+    } catch (e) {
+      err.textContent = errorText(e);
+      err.hidden = false;
+      go.disabled = !matches();
+    }
+  });
 }
 
 main();

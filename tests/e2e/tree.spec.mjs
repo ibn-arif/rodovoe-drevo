@@ -226,3 +226,36 @@ test('a tree opened by the owner link appears in «Мои древа»; edit and
   await visit(o);
   await expect(page.locator('#mine-list a')).toHaveCount(1);
 });
+
+test('the owner deletes the tree after typing its title; relatives do not see the button', async ({ browser }) => {
+  const { backend, o, e } = await seed();
+  const rel = await openTree(browser, backend, e);
+  await rel.getByRole('button', { name: 'Пригласить родных' }).click();
+  await expect(rel.getByRole('button', { name: 'Удалить древо…' })).toBeHidden();
+
+  const page = await openTree(browser, backend, o);
+  await page.getByRole('button', { name: 'Пригласить родных' }).click();
+  await page.getByRole('button', { name: 'Удалить древо…' }).click();
+  const go = page.getByRole('button', { name: 'Удалить навсегда' });
+  await expect(page.locator('#delete-tree-title')).toHaveText('Род Магомеда');
+  await expect(go).toBeDisabled();
+  await page.locator('#delete-confirm-title').fill('Род Магомед');
+  await expect(go).toBeDisabled();
+  await page.locator('#delete-confirm-title').fill('Род Магомеда');
+  await go.click();
+  await expect(page).toHaveURL(/index\.html$/);
+  await expect(page.locator('#notice')).toHaveText(/Древо удалено/);
+  await expect(page.locator('#mine')).toBeHidden();
+  await page.goto('tree.html#t=' + e);
+  await expect(page.locator('#fatal')).toBeVisible();
+});
+
+test('«убрать из списка» only removes the tree from this browser', async ({ browser }) => {
+  const { backend, o } = await seed();
+  const page = await openTree(browser, backend, o);
+  await page.goto('index.html');
+  await page.getByRole('button', { name: /Убрать «Род Магомеда» из списка/ }).click();
+  await expect(page.locator('#mine')).toBeHidden();
+  await page.goto('tree.html#t=' + o);
+  await expect(page.locator('.node').first()).toBeVisible();
+});

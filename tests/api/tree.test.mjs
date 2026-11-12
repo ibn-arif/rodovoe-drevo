@@ -1,5 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { randomUUID } from 'node:crypto';
 import { freshDb, rpc, setIp, h, tok, makeTree, expectError } from './helpers.mjs';
 
 test('create and open', async () => {
@@ -54,4 +55,17 @@ test('tree_version and ping', async () => {
   const t = await makeTree(db);
   assert.equal(Number(await rpc(db, 'tree_version', t.v)), 0);
   assert.equal(await rpc(db, 'ping'), 1);
+});
+
+test('delete_tree: only the owner, only with the exact title; everything of that tree goes, other trees stay', async () => {
+  const db = await freshDb();
+  const t = await makeTree(db);
+  const other = await makeTree(db, 'Иван', 'Род Ивана');
+  await rpc(db, 'save_changes', t.o, 'Я', 0, [{ type: 'add_child', id: randomUUID(), parent_id: t.rootId, name: 'Али', spouse: '' }], false);
+  await expectError(rpc(db, 'delete_tree', t.e, 'Род Магомеда'), 'forbidden');
+  await expectError(rpc(db, 'delete_tree', t.v, 'Род Магомеда'), 'forbidden');
+  await expectError(rpc(db, 'delete_tree', t.o, 'Род Ивана'), 'wrong_title');
+  assert.equal((await rpc(db, 'delete_tree', t.o, '  Род Магомеда ')), true);
+  for (const k of [t.o, t.e, t.v]) await expectError(rpc(db, 'open_tree', k), 'tree_not_found');
+  assert.equal((await rpc(db, 'open_tree', other.o)).people.length, 1);
 });

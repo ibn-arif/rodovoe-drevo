@@ -11,6 +11,7 @@ const ARGS = {
   getHistory: ['get_history', (t, l = 50, b = null) => [t, l, b]],
   revert: ['revert', (t, a, s, e = null) => [t, a, s, e]],
   deletedItems: ['deleted_items', t => [t]],
+  deleteTree: ['delete_tree', (t, title) => [t, title]],
 };
 
 export async function createBackend() {
@@ -37,7 +38,7 @@ export async function installFakeApi(context, backend, { intro = false } = {}) {
   });
   await context.addInitScript(methods => {
     const codes = ['tree_not_found', 'forbidden', 'bad_name', 'bad_op', 'bad_token', 'cycle', 'root_protected',
-      'not_root', 'too_many_trees', 'too_many_saves', 'too_large', 'already_reverted', 'cannot_revert'];
+      'not_root', 'too_many_trees', 'too_many_saves', 'too_large', 'already_reverted', 'cannot_revert', 'wrong_title'];
     window.__TEST_API__ = Object.fromEntries(methods.map(m => [m, async (...args) => {
       const r = await window.__fakeCall(m, JSON.parse(JSON.stringify(args)));
       if (r.error) throw new Error(codes.find(c => r.error.includes(c)) ?? 'network');

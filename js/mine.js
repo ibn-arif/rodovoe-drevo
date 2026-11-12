@@ -17,3 +17,7 @@ export function rememberTree(title, owner) {
     safeLocalStorage()?.setItem(MINE, JSON.stringify(list));
   } catch { /* без хранилища */ }
 }
+
+export function forgetTree(owner) {
+  try { safeLocalStorage()?.setItem(MINE, JSON.stringify(myTrees().filter(t => t.owner !== owner))); } catch { /* без хранилища */ }
+}

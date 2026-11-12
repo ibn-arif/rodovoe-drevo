@@ -75,6 +75,10 @@ button, input, select, textarea { font: inherit; color: inherit; }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .btn-primary { color: var(--paper); } }
 .btn-quiet { border-color: transparent; background: transparent; color: var(--madder); padding-inline: 8px; }
 .btn-danger { color: var(--danger); }
+.btn-danger-solid { background: var(--danger); border-color: var(--danger); color: var(--paper); font-weight: 700; }
+.btn-danger-solid:hover { filter: brightness(1.08); border-color: var(--danger); }
+.btn:disabled { opacity: .45; cursor: not-allowed; filter: none; }
+.dlg-aside { margin-right: auto; }
 .field { display: grid; gap: 6px; }
 .field label { font-size: 15px; color: var(--muted); }
 .input { width: 100%; border: 1px solid var(--rule); border-radius: 10px; background: var(--sheet);
@@ -106,7 +110,12 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .steps p { margin: 0; color: var(--muted); }
 .mine { margin-top: 40px; }
 .mine h2 { font-size: 21px; margin-bottom: 8px; }
-.mine ul { margin: 0; padding-left: 1.1em; }
+.mine ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 2px; }
+.mine li { display: flex; align-items: center; gap: 4px; }
+.mine li a { padding-block: 8px; }
+.mine-forget { min-height: 40px; min-width: 40px; padding: 0; color: var(--muted); font-size: 20px; line-height: 1; }
+.mine-forget:hover { color: var(--danger); }
+.notice { background: var(--sheet); border: 1px solid var(--rule); border-radius: 12px; padding: 12px 16px; margin: 0 0 24px; }
 
 /* ── Ссылки ── */
 .share { display: grid; gap: 18px; max-width: 560px; }

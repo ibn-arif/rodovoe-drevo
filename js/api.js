@@ -2,7 +2,7 @@
 // В тестах страница подменяет API через window.__TEST_API__.
 const API_URL = new URL('../api/index.php', import.meta.url).href;
 const CODES = ['tree_not_found', 'forbidden', 'bad_name', 'bad_op', 'bad_token', 'cycle', 'root_protected',
-  'not_root', 'too_many_trees', 'too_many_saves', 'too_large', 'already_reverted', 'cannot_revert'];
+  'not_root', 'too_many_trees', 'too_many_saves', 'too_large', 'already_reverted', 'cannot_revert', 'wrong_title'];
 
 async function call(fn, args) {
   let res, body;
@@ -24,6 +24,7 @@ export const serverApi = {
   getHistory: (token, limit = 50, before = null) => call('get_history', [token, limit, before]),
   revert: (token, author, saveId, editId = null) => call('revert', [token, author, saveId, editId]),
   deletedItems: token => call('deleted_items', [token]),
+  deleteTree: (token, title) => call('delete_tree', [token, title]),
 };
 
 export function getApi() {
@@ -41,6 +42,7 @@ export const ERROR_TEXT = {
   not_root: 'Предка можно добавить только самому верхнему человеку.',
   too_many_trees: 'Слишком много новых древ за короткое время. Попробуйте через час.',
   already_reverted: 'Это уже откачено.',
+  wrong_title: 'Название не совпадает. Введите его точно так, как оно написано.',
   cannot_revert: 'Откатить нельзя: после этого древо изменилось, и откат его сломает. Сначала откатите более поздние изменения.',
   too_many_saves: 'Слишком много сохранений подряд. Подождите немного и сохраните ещё раз.',
   too_large: 'Слишком большое изменение или древо. Сохраните частями.',

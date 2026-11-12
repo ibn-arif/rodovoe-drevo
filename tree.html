@@ -85,7 +85,27 @@
   <form method="dialog">
     <h2>Пригласить родных</h2>
     <div id="invite-share" class="share"></div>
-    <div class="dlg-actions"><button class="btn" type="submit">Закрыть</button></div>
+    <div class="dlg-actions">
+      <button class="btn btn-quiet btn-danger dlg-aside" id="delete-tree-btn" type="button" hidden>Удалить древо…</button>
+      <button class="btn" type="submit">Закрыть</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="delete-dialog" class="dlg" aria-labelledby="delete-title">
+  <form method="dialog" id="delete-form">
+    <h2 id="delete-title">Удалить древо навсегда</h2>
+    <p>Будут удалены все люди, браки и вся история изменений. Ни одна ссылка на это древо больше не откроется — ни ваша, ни у родных. Отменить это нельзя.</p>
+    <p class="muted">Если хотите оставить себе копию, сначала скачайте плакат PDF.</p>
+    <div class="field">
+      <label for="delete-confirm-title">Чтобы подтвердить, введите название: <b id="delete-tree-title"></b></label>
+      <input id="delete-confirm-title" class="input" maxlength="200" autocomplete="off" spellcheck="false">
+    </div>
+    <p id="delete-error" class="error" role="alert" hidden></p>
+    <div class="dlg-actions">
+      <button class="btn" value="cancel" formnovalidate type="submit">Отмена</button>
+      <button class="btn btn-danger-solid" id="delete-confirm" type="button" disabled>Удалить навсегда</button>
+    </div>
   </form>
 </dialog>
 
