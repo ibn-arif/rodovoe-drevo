@@ -12,6 +12,7 @@ import { renderShare } from './share.js';
 import { initHistory } from './history.js';
 import { initPoster } from './poster/dialog.js';
 import { initHelp } from './help.js';
+import { rememberTree } from './mine.js';
 
 const $ = s => document.querySelector(s);
 const api = getApi();
@@ -118,6 +119,8 @@ async function main() {
     return;
   }
   state.role = state.server.role;
+  // Древо создателя попадает в «Мои древа» на главной — и после смены браузера или адреса сайта.
+  if (state.role === 'owner' && !state.server.is_example) rememberTree(state.server.title, state.token);
   state.draft = createDraft(state.server.tree_id);
   if (!state.draft.ops.length) state.draft.setBase(state.server.version);
   view = createTreeView($('#stage'), {

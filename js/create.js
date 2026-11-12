@@ -3,18 +3,9 @@ import { getApi, errorText } from './api.js';
 import { newToken, derive, hashToken, treeLink } from './tokens.js';
 import { validateName } from './names.js';
 import { renderShare } from './share.js';
-import { safeLocalStorage } from './draft.js';
+import { myTrees, rememberTree } from './mine.js';
 
 const $ = s => document.querySelector(s);
-const MINE = 'drevo:my-trees';
-const store = safeLocalStorage();
-
-function myTrees() {
-  try { return JSON.parse(store?.getItem(MINE) || '[]'); } catch { return []; }
-}
-function remember(title, owner) {
-  try { store?.setItem(MINE, JSON.stringify([{ title, owner }, ...myTrees()].slice(0, 50))); } catch { /* без хранилища */ }
-}
 
 function showMine() {
   const list = myTrees();
@@ -54,7 +45,7 @@ $('#create').addEventListener('submit', async e => {
     const title = titleInput.value.trim().slice(0, 120) || 'Род ' + name.value;
     await getApi().createTree(title, name.value, {
       owner: await hashToken(owner), edit: await hashToken(edit), view: await hashToken(view) });
-    remember(title, owner);
+    rememberTree(title, owner);
     $('#start').hidden = true;
     $('#steps').hidden = true;
     $('#mine').hidden = true;

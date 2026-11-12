@@ -207,3 +207,22 @@ test('older / younger buttons change the order of siblings', async ({ browser })
   await page.reload();
   await expect.poll(order).toEqual(['Патимат', 'Али']);
 });
+
+test('a tree opened by the owner link appears in «Мои древа»; edit and view links do not', async ({ browser }) => {
+  const { backend, o, e, v } = await seed();
+  const page = await openTree(browser, backend, e);
+  const visit = async token => {
+    await page.goto('index.html');
+    await page.goto('tree.html#t=' + token);
+    await expect(page.locator('.node').first()).toBeVisible();
+    await page.goto('index.html');
+  };
+  await visit(v);
+  await expect(page.locator('#mine')).toBeHidden();
+  await visit(o);
+  await expect(page.locator('#mine-list a')).toHaveCount(1);
+  await expect(page.locator('#mine-list a')).toHaveText('Род Магомеда');
+  await expect(page.locator('#mine-list a')).toHaveAttribute('href', new RegExp('#t=' + o + '$'));
+  await visit(o);
+  await expect(page.locator('#mine-list a')).toHaveCount(1);
+});
