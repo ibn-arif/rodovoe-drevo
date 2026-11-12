@@ -130,3 +130,16 @@ test('dropConflicting removes ops on conflicting people and ops that depended on
   const server = applyOps(snap(), [{ type: 'delete', person_id: 'pat' }]);
   assert.deepEqual(dropConflicting(server, ops, new Set(['pat'])), [ops[2]]);
 });
+
+test('reorder in the draft matches the database', async () => {
+  const { describeEdit } = await import('../../js/model.js');
+  const s = applyOps(snap(), [{ type: 'reorder', person_id: 'pat', index: 0 }]);
+  assert.deepEqual(buildTree(s).children.map(c => c.name), ['Патимат', 'Али']);
+  assert.equal(s.people.find(p => p.id === 'pat').draft, 'changed');
+  const s2 = applyOps(snap(), [{ type: 'reorder', person_id: 'ali', index: 9 }]);
+  assert.deepEqual(buildTree(s2).children.map(c => c.name), ['Патимат', 'Али']);
+  throwsCode(() => applyOps(snap(), [{ type: 'reorder', person_id: 'root', index: 0 }]), 'root_protected');
+  assert.equal(describeOp({ type: 'reorder', person_id: 'pat', index: 0 }, snap()), 'Старшинство: Патимат — 1 из 2 (родитель — Магомед)');
+  assert.equal(describeEdit({ op: { type: 'reorder' }, before: [], after: { name: 'Патимат', index: 0, count: 2, parent: 'Магомед' } }),
+    'Старшинство: Патимат — 1 из 2 (родитель — Магомед)');
+});

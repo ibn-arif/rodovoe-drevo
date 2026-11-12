@@ -93,6 +93,19 @@ export function applyOps(snapshot, ops) {
         s.marriages = s.marriages.filter(m => !gone.has(m.a_id) && !gone.has(m.b_id));
         break;
       }
+      case 'reorder': {
+        // Сдвинуть среди братьев и сестёр: порядок = старшинство (как в базе).
+        const p = find(op.person_id);
+        if (p.id === s.root_id) fail('root_protected');
+        if (typeof op.index !== 'number') fail('bad_op');
+        const sib = s.people.filter(q => q.parent_id === p.parent_id && q.id !== p.id)
+          .sort((a, b) => a.pos - b.pos || (a.id < b.id ? -1 : 1));
+        const k = Math.max(0, Math.min(Math.trunc(op.index), sib.length));
+        sib.splice(k, 0, p);
+        sib.forEach((q, i) => { q.pos = i; });
+        if (p.draft !== 'added') p.draft = 'changed';
+        break;
+      }
       case 'marry': {
         const a = find(op.a_id), b = find(op.b_id);
         if (a.id === b.id || s.marriages.some(m => m.id === op.id ||
@@ -133,6 +146,11 @@ export function describeOp(op, snapshot) {
       return n > 1 ? `Удалена ветка: ${name(op.person_id)} — ${n} чел.` : `Удалён: ${name(op.person_id)}`;
     }
     case 'marry': return `Брак: ${name(op.a_id)} и ${name(op.b_id)}`;
+    case 'reorder': {
+      const p = snapshot.people.find(x => x.id === op.person_id);
+      const n = snapshot.people.filter(x => x.parent_id === p?.parent_id).length;
+      return `Старшинство: ${name(op.person_id)} — ${Math.max(0, Math.min(op.index, n - 1)) + 1} из ${n} (родитель — ${name(p?.parent_id)})`;
+    }
     case 'unmarry': {
       const m = snapshot.marriages.find(x => x.id === op.marriage_id);
       return m ? `Убран брак: ${name(m.a_id)} и ${name(m.b_id)}` : 'Убран брак';
@@ -190,6 +208,7 @@ export function describeEdit(edit, nameOf = () => undefined) {
     case 'move': return `Перенесён: ${b.name}` + (nameOf(a.parent_id) ? ` (новый родитель — ${nameOf(a.parent_id)})` : '');
     case 'delete': return a.count > 1 ? `Удалена ветка: ${b.name} — ${a.count} чел.` : `Удалён: ${b.name}`;
     case 'marry': return `Брак: ${a.a} и ${a.b}`;
+    case 'reorder': return `Старшинство: ${a.name} — ${a.index + 1} из ${a.count} (родитель — ${a.parent})`;
     case 'unmarry': return `Убран брак: ${b.a} и ${b.b}`;
     case 'revert': return 'Откат правки';
     default: return 'Изменение';

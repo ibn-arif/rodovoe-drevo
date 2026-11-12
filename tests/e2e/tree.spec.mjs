@@ -188,3 +188,22 @@ test('collapse all', async ({ browser }) => {
   await page.getByRole('button', { name: 'Раскрыть всё' }).click();
   await expect(page.locator('.node')).toHaveCount(5);
 });
+
+test('older / younger buttons change the order of siblings', async ({ browser }) => {
+  const s = await seed();
+  const page = await openTree(browser, s.backend, s.e);
+  const order = () => page.evaluate(() => [...document.querySelectorAll('.node')]
+    .map(n => ({ d: d3.select(n).datum(), y: n.getBoundingClientRect().top }))
+    .filter(n => n.d.depth === 1).sort((a, b) => a.y - b.y).map(n => n.d.data.name));
+  expect(await order()).toEqual(['Али', 'Патимат']);
+  await select(page, 'Патимат');
+  await expect(page.getByRole('button', { name: 'Младше' })).toBeDisabled();
+  await page.getByRole('button', { name: 'Старше' }).click();
+  await expect.poll(order).toEqual(['Патимат', 'Али']);
+  await page.locator('#draft-bar').getByRole('button', { name: 'Сохранить' }).click();
+  await page.getByLabel('Как вас подписать?').fill('Зайнаб');
+  await page.getByRole('button', { name: 'Сохранить изменения' }).click();
+  await expect(page.locator('#draft-bar')).toBeHidden();
+  await page.reload();
+  await expect.poll(order).toEqual(['Патимат', 'Али']);
+});

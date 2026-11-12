@@ -131,6 +131,15 @@ export function renderPanel(el, ctx) {
     return ids;
   };
 
+  // Старшинство: порядок среди братьев и сестёр (старшие — выше в древе и левее на плакате).
+  const siblings = parent ? s.people.filter(x => x.parent_id === parent.id).sort((a, b) => a.pos - b.pos) : [];
+  const myIndex = siblings.findIndex(x => x.id === p.id);
+  const order = siblings.length > 1 ? h('div', { class: 'field' },
+    h('span', { class: 'muted small' }, `По старшинству: ${myIndex + 1}-й из ${siblings.length} у ${parent.name}. Старшие стоят выше в древе и левее на плакате.`),
+    h('div', { class: 'actions' },
+      h('button', { type: 'button', class: 'btn', disabled: myIndex === 0, on: { click: () => apply({ type: 'reorder', person_id: p.id, index: myIndex - 1 }) } }, 'Старше'),
+      h('button', { type: 'button', class: 'btn', disabled: myIndex === siblings.length - 1, on: { click: () => apply({ type: 'reorder', person_id: p.id, index: myIndex + 1 }) } }, 'Младше'))) : null;
+
   const actions = h('div', { class: 'actions' },
     btn('＋ ребёнок', () => nameForm('Имя ребёнка', 'Добавить', v => {
       if (apply({ type: 'add_child', id: crypto.randomUUID(), parent_id: p.id, name: v, spouse: '' })) sub.replaceChildren();
@@ -157,6 +166,6 @@ export function renderPanel(el, ctx) {
   const editToggle = btn('Исправить', () => { ctx.setEditing(true); editForm.hidden = false; nameIn.focus(); toggleBox.hidden = true; });
   const toggleBox = h('div', {}, editToggle);
   toggleBox.hidden = !!ctx.editing;
-  el.replaceChildren(h('div', { class: 'panel-in' }, head, p.spouse ? h('p', {}, p.spouse) : null, toggleBox, editForm, marList, actions, sub, error));
+  el.replaceChildren(h('div', { class: 'panel-in' }, head, p.spouse ? h('p', {}, p.spouse) : null, toggleBox, editForm, marList, order, actions, sub, error));
   el.hidden = false;
 }

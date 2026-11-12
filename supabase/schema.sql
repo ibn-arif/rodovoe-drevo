@@ -245,6 +245,7 @@ begin
     when 'move' then changed := array[drevo_private.uuid_of(p_op, 'person_id')];
                      needed := array[drevo_private.uuid_of(p_op, 'parent_id')];
     when 'delete' then changed := array[drevo_private.uuid_of(p_op, 'person_id')];
+    when 'reorder' then changed := array[drevo_private.uuid_of(p_op, 'person_id')];
     when 'marry' then changed := array[drevo_private.uuid_of(p_op, 'a_id'), drevo_private.uuid_of(p_op, 'b_id')];
     when 'unmarry' then
       select array[m.a_id, m.b_id] into changed from public.marriages m where m.id = drevo_private.uuid_of(p_op, 'marriage_id');
@@ -262,7 +263,8 @@ language sql immutable as $$
   select jsonb_strip_nulls(jsonb_build_object(
     'type', p ->> 'type', 'id', p ->> 'id', 'person_id', p ->> 'person_id', 'parent_id', p ->> 'parent_id',
     'child_id', p ->> 'child_id', 'a_id', p ->> 'a_id', 'b_id', p ->> 'b_id', 'marriage_id', p ->> 'marriage_id',
-    'name', left(p ->> 'name', 200), 'spouse', left(p ->> 'spouse', 200)))
+    'name', left(p ->> 'name', 200), 'spouse', left(p ->> 'spouse', 200),
+    'index', case when jsonb_typeof(p -> 'index') = 'number' then (p ->> 'index')::numeric::int end))
 $$;
 
 -- Применяет одну правку, пишет её в журнал. Возвращает id записи журнала.
@@ -334,6 +336,26 @@ begin
     update people set deleted_by = v_edit, updated_by = p_author, updated_at = now() where id = any(v_ids);
     v_before := jsonb_build_object('name', v_p.name);
     v_after := jsonb_build_object('count', cardinality(v_ids));
+
+  elsif v_type = 'reorder' then
+    -- Сдвинуть человека среди братьев и сестёр (порядок = старшинство).
+    v_p := drevo_private.alive(p_tree, drevo_private.uuid_of(p_op, 'person_id'));
+    if v_p.id = v_root then raise exception 'root_protected'; end if;
+    if jsonb_typeof(p_op -> 'index') is distinct from 'number' then raise exception 'bad_op'; end if;
+    select jsonb_agg(jsonb_build_object('id', id, 'pos', pos) order by pos, id) into v_before
+      from people where parent_id = v_p.parent_id and deleted_by is null;
+    with sib as (
+      select id, row_number() over (order by pos, id) - 1 as i from people
+       where parent_id = v_p.parent_id and deleted_by is null and id <> v_p.id
+    ), tgt as (select greatest(0, least((p_op ->> 'index')::numeric::int, (select count(*) from sib)::int)) as k)
+    update people pp set pos = case when pp.id = v_p.id then (select k from tgt)
+                                    else (select i + case when i >= (select k from tgt) then 1 else 0 end from sib where sib.id = pp.id) end,
+                         updated_by = case when pp.id = v_p.id then p_author else pp.updated_by end,
+                         updated_at = case when pp.id = v_p.id then now() else pp.updated_at end
+     where pp.parent_id = v_p.parent_id and pp.deleted_by is null;
+    select jsonb_build_object('name', v_p.name, 'index', pos, 'count', jsonb_array_length(v_before),
+             'parent', (select name from people where id = v_p.parent_id)) into v_after from people where id = v_p.id;
+    v_ids := array[v_p.id];
 
   elsif v_type = 'marry' then
     v_id := drevo_private.uuid_of(p_op, 'id');
@@ -508,6 +530,11 @@ begin
       raise exception 'cannot_revert';
     end if;
     update people set deleted_by = null, updated_by = p_author, updated_at = now() where deleted_by = p_edit.id;
+
+  elsif v_type = 'reorder' then
+    update people pp set pos = (b ->> 'pos')::int
+      from jsonb_array_elements(p_edit.before) b
+     where pp.id = (b ->> 'id')::uuid;
 
   elsif v_type = 'marry' then
     update marriages set deleted_by = v_edit where id = (p_edit.after ->> 'id')::uuid and deleted_by is null;
