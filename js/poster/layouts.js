@@ -205,7 +205,9 @@ function topdown(g, root, area, theme, m = topdownMeasure(root)) {
     if (!d.children) { cx.set(d, x + dm.w / 2); return; }
     let sx = x + (dm.w - dm.row) / 2;
     for (const c of d.children) { place(c, sx); sx += dim.get(c).w + dm.gap; }
-    const mid = (cx.get(d.children[0]) + cx.get(d.children.at(-1))) / 2, half = bw.get(d) / 2;
+    // Родитель — над средним ребёнком (нечётное число) или посередине между двумя средними (чётное).
+    const k = d.children.length, xs = d.children.map(c => cx.get(c));
+    const mid = k % 2 ? xs[(k - 1) / 2] : (xs[k / 2 - 1] + xs[k / 2]) / 2, half = bw.get(d) / 2;
     cx.set(d, Math.min(Math.max(mid, x + half), x + dm.w - half));
   })(root, 0);
   // У всех рамок поколения одна высота и ровный верх, как на классической схеме.

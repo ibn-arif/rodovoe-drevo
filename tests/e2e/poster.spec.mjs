@@ -229,3 +229,26 @@ test('dialog offers roll only for top-down and a print-on-sheets choice', async 
   const [download] = await Promise.all([page.waitForEvent('download', { timeout: 60_000 }), page.getByRole('button', { name: 'Скачать PDF' }).click()]);
   expect(download.suggestedFilename()).toMatch(/_topdown_ROLL_A4-sheets\.pdf$/);
 });
+
+test('topdown: parent stands right above the middle child (odd) or between the two middle ones (even)', async ({ page }) => {
+  await synthetic(page);
+  const r = await page.evaluate(async () => {
+    const { renderPoster } = await import('/js/poster/layouts.js');
+    const names = ['МухӀамадхӀабиб', 'Иса', 'Узлипат', 'Абдулмуслим', 'Али', 'МухӀамадгӀарип', 'Муса'];
+    let n = 0;
+    const mk = (d, k) => ({ id: 'p' + n, name: names[n++ % names.length], spouse: '', children: d < 2 ? Array.from({ length: k }, (_, i) => mk(d + 1, 2 + ((n + i) % 3))) : [] });
+    const root = mk(0, 3);
+    const svg = renderPoster(root, { design: 'topdown', paper: 'A1', title: 'Т' });
+    const box = new Map([...svg.querySelectorAll('rect.box')].map(r => [r.dataset.id, +r.getAttribute('x') + +r.getAttribute('width') / 2]));
+    const bad = [];
+    (function walk(p) {
+      if (!p.children.length) return;
+      const xs = p.children.map(c => box.get(c.id)), k = xs.length;
+      const want = k % 2 ? xs[(k - 1) / 2] : (xs[k / 2 - 1] + xs[k / 2]) / 2;
+      if (Math.abs(box.get(p.id) - want) > 0.5) bad.push(`${p.name}: ${k} детей`);
+      p.children.forEach(walk);
+    })(root);
+    return bad;
+  });
+  expect(r).toEqual([]);
+});
