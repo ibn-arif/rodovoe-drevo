@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test';
 import { randomUUID as uid } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { createBackend, installFakeApi } from './fake-api.js';
-import { rpc, makeTree } from '../sql/helpers.mjs';
+import { rpc, makeTree } from '../api/helpers.mjs';
 
 test('layouts render 400 people', async ({ page }) => {
   await page.goto('index.html');

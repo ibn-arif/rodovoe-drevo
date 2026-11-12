@@ -1,0 +1,5 @@
+# Служебные файлы API не отдаются напрямую; работает только api/index.php.
+<FilesMatch "^(lib\.php|schema\..*\.sql)$">
+  Require all denied
+</FilesMatch>
+Options -Indexes

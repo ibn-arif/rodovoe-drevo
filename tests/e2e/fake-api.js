@@ -1,7 +1,7 @@
-// Тестовый API для страниц: настоящая схема (supabase/schema.sql) в PGlite внутри Node.
+// Тестовый API для страниц: настоящий сервер (api/index.php под php -S, база SQLite) — тот же, что на хостинге.
 // Браузер зовёт window.__TEST_API__.*, вызов уходит в Node через exposeFunction —
 // поэтому все вкладки одного теста видят одну базу, как на живом сайте.
-import { freshDb, rpc } from '../sql/helpers.mjs';
+import { freshDb, rpc } from '../api/helpers.mjs';
 
 const ARGS = {
   createTree: ['create_tree', (title, root, h) => [title, root, h.owner, h.edit, h.view]],

@@ -18,21 +18,3 @@ test('romanov example data', () => {
     if (p.sp) assert.equal(validateName(p.sp).ok, true, p.sp);
   }
 });
-
-test('example.sql builds a view-only example tree', async () => {
-  const { buildExampleSql } = await import('../../scripts/build-example.mjs');
-  const { freshDb, rpc } = await import('../sql/helpers.mjs');
-  const { sql, ownerToken } = buildExampleSql(data, 'test-owner-token-123456');
-  assert.equal(ownerToken, 'test-owner-token-123456');
-  assert.ok(!sql.includes('test-owner-token-123456'), 'owner token must not be in the SQL');
-  const db = await freshDb();
-  await db.exec(sql);
-  const t = await rpc(db, 'open_tree', 'romanovy');
-  assert.equal(t.role, 'view');
-  assert.equal(t.is_example, true);
-  assert.equal(t.title, 'Романовы');
-  assert.equal(t.people.length, all.length);
-  // Повторное применение не создаёт второе древо.
-  await db.exec(sql);
-  assert.equal((await rpc(db, 'open_tree', 'romanovy')).people.length, all.length);
-});

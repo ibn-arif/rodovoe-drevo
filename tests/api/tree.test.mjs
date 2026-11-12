@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { freshDb, asAnon, rpc, setIp, h, tok, makeTree, expectError } from './helpers.mjs';
+import { freshDb, rpc, setIp, h, tok, makeTree, expectError } from './helpers.mjs';
 
 test('create and open', async () => {
   const db = await freshDb();
@@ -21,15 +21,18 @@ test('unknown token', async () => {
   await expectError(rpc(db, 'open_tree', 'нет-такого'), 'tree_not_found');
 });
 
-test('tables closed', async () => {
+test('only the public functions can be called; the database files are not served', async () => {
   const db = await freshDb();
   const t = await makeTree(db);
-  for (const table of ['trees', 'people', 'marriages', 'saves', 'edits', 'tree_creations']) {
-    await expectError(asAnon(db, `select * from ${table}`), 'permission denied');
+  for (const fn of ['role', 'apply_op', 'undo_edit', 'clean_name', 'exec', '__construct', '']) {
+    await expectError(rpc(db, fn, t.o), 'bad_request');
   }
-  await expectError(asAnon(db, 'select * from drevo_private.role($1)', [t.o]), 'permission denied');
-  const r = await asAnon(db, 'select open_tree($1) as v', [t.o]);
-  assert.equal(r.rows[0].v.role, 'owner');
+  assert.equal((await rpc(db, 'open_tree', t.o)).role, 'owner');
+  const base = db.url.replace('/api/index.php', '');
+  for (const path of ['/api/lib.php', '/api/schema.mysql.sql', '/api/schema.sqlite.sql', '/api/config.php']) {
+    const r = await fetch(base + path);
+    assert.ok(r.status === 403 || r.status === 404, `${path} → ${r.status}`);
+  }
 });
 
 test('rate limit', async () => {

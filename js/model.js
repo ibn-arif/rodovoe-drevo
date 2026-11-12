@@ -1,5 +1,5 @@
 // Модель древа: снимок из базы → дерево; черновик правок поверх снимка; описание правок.
-// Правила applyOps повторяют функции базы (supabase/schema.sql), коды ошибок те же.
+// Правила applyOps повторяют сервер (api/lib.php), коды ошибок те же.
 import { validateName } from './names.js';
 
 const fail = code => { throw new Error(code); };

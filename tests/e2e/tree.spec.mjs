@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { randomUUID as uid } from 'node:crypto';
 import { createBackend, installFakeApi } from './fake-api.js';
-import { rpc, makeTree } from '../sql/helpers.mjs';
+import { rpc, makeTree } from '../api/helpers.mjs';
 
 // Магомед → Али → Расул; Магомед → Патимат → ХӀасан
 async function seed() {

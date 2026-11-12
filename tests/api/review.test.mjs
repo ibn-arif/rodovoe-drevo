@@ -2,7 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { randomUUID as uid } from 'node:crypto';
-import { freshDb, rpc, makeTree, expectError, h, tok, setIp, asAnon } from './helpers.mjs';
+import { freshDb, rpc, makeTree, expectError, h, tok, setIp } from './helpers.mjs';
 
 const save = (db, token, ops, base, author = 'Расул', force = false) => rpc(db, 'save_changes', token, author, base, ops, force);
 const revert = (db, token, saveId, editId = null) => rpc(db, 'revert', token, 'Хозяин', saveId, editId);
@@ -97,16 +97,17 @@ test('I2: saves per tree are rate limited', async () => {
   assert.ok(err && err.message.includes('too_many_saves'), String(err?.message));
 });
 
-test('I3: client ip prefers cf-connecting-ip and ignores a forged first x-forwarded-for', async () => {
+test('I3: a forged X-Forwarded-For does not get around the per-address limit', async () => {
   const db = await freshDb();
-  await db.query(`select set_config('request.headers', $1, false)`, [JSON.stringify({ 'x-forwarded-for': '6.6.6.6, 1.2.3.4', 'cf-connecting-ip': '1.2.3.4' })]);
-  for (let i = 0; i < 5; i++) await makeTree(db);
-  await db.query(`select set_config('request.headers', $1, false)`, [JSON.stringify({ 'x-forwarded-for': '7.7.7.7, 1.2.3.4', 'cf-connecting-ip': '1.2.3.4' })]);
-  await expectError(makeTree(db), 'too_many_trees');
-  await db.query(`select set_config('request.headers', $1, false)`, [JSON.stringify({ 'x-forwarded-for': '9.9.9.9, 5.5.5.5' })]);
-  for (let i = 0; i < 5; i++) await makeTree(db);
-  await db.query(`select set_config('request.headers', $1, false)`, [JSON.stringify({ 'x-forwarded-for': '8.8.8.8, 5.5.5.5' })]);
-  await expectError(makeTree(db), 'too_many_trees');
+  setIp(db, '1.2.3.4');
+  const forged = async ip => {
+    const o = tok();
+    const r = await fetch(db.url, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Test-Ip': '1.2.3.4', 'X-Forwarded-For': ip },
+      body: JSON.stringify({ fn: 'create_tree', args: ['Т', 'Имя', h(o), h(tok()), h(tok())] }) });
+    return (await r.json());
+  };
+  for (let i = 0; i < 5; i++) await forged('9.9.9.' + i);
+  assert.equal((await forged('8.8.8.8')).error, 'too_many_trees');
 });
 
 test('I4: unmarry of an already removed marriage is a conflict, not bad_op', async () => {
